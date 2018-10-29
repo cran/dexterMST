@@ -119,10 +119,15 @@ fit_enorm_mst_ = function(db, qtpredicate, fixed_parameters=NULL, env)
                       fixed_b = fixed_parameters)
   
   
+  abl_tables = new.env(parent = emptyenv())
+  abl_tables$mle = NULL
+  
+
   
   out = list(mst_est = bind_cols(select(mst_inputs$ssIS, .data$item_id, .data$item_score), 
-                                 res[names(res) != 'acov.cml']), 
+                                 res[names(res) != 'acov.beta']), 
              mst_inputs = mst_inputs,
+             abl_tables = abl_tables,
              inputs = list(method = 'CML',
                            ssI = mst_inputs$ssI %>% mutate(first = as.integer(first + rank(first) - 1L), last = as.integer(last + rank(last))),
                            ssIS = bind_rows(mst_inputs$ssIS, 
@@ -132,13 +137,17 @@ fit_enorm_mst_ = function(db, qtpredicate, fixed_parameters=NULL, env)
                            bkList = mst_inputs$bkList,
                            has_fixed_parms = !is.null(fixed_parameters)))
   
+  out$inputs$plt = out$mst_inputs$plt
+  out$mst_inputs$plt = NULL
   # Prepare to label vectors/matrices
   it_sc_lab = paste0(out$inputs$ssIS$item_id[-out$inputs$ssI$first], 
                      "_", out$inputs$ssIS$item_score[-out$inputs$ssI$first])
   
   # for compatibility with dexter
-  out$est = dexter.toDexter(out$mst_est$beta.cml, out$mst_est$item_score, out$mst_inputs$ssI$first, out$mst_inputs$ssI$last)$est
-  out$est$acov.cml = res$acov.cml
+  out$est = dexter.toDexter(out$mst_est$beta, out$mst_est$item_score, 
+                            out$mst_inputs$ssI$first, out$mst_inputs$ssI$last)$est
+  out$est$acov.beta = res$acov.beta
+  out$est$beta.cml = out$mst_est$beta # for backward compatibility
   
   class(out) = append(c('mst_enorm', 'prms') ,class(out))
   out
@@ -166,8 +175,8 @@ coef.mst_enorm = function(object, ...)
 {
   # beetje lastig, namen gelijktrekken aan dexter 
   object$mst_est %>% 
-    select(-.data$E, -.data$O, -.data$b, -.data$delta) %>% 
-    rename(beta = 'beta.cml', SE_b = 'se.cml') %>%
+    select(-.data$E, -.data$O, -.data$b, -.data$eta) %>% 
+    rename(SE_beta = 'se.cml') %>%
     mutate_if(is.matrix, as.vector) %>%
     as.data.frame()
 }

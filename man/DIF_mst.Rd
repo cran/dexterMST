@@ -21,9 +21,7 @@ based on equality of relative item difficulties category locations
 \dontrun{
 
 dif = DIF_mst(db, person_property = 'test_mode')
-
 print(dif)
-
 plot(dif)
 
 }

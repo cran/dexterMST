@@ -236,12 +236,22 @@ safe_mst_data = function(db, qtpredicate, env){
                           filter_col = NULL)
   
   
-  scoretab = respData %>%
+  plt = respData %>%
     group_by(.data$person_id, .data$test_id, .data$booklet_id) %>%
     summarise(booklet_score = sum(.data$item_score)) %>%
-    ungroup() %>%
+    ungroup() 
+  
+  scoretab = plt %>%
     group_by(.data$test_id, .data$booklet_id, .data$booklet_score) %>%
     summarise(n = n()) %>%
+    ungroup()
+  
+  plt = plt %>% 
+    inner_join(respData, by = c('person_id','test_id', 'booklet_id')) %>%
+    mutate(booklet_id = paste(.data$test_id, .data$booklet_id, sep='.')) %>%
+    rename(sumScore = 'booklet_score') %>%
+    group_by(.data$booklet_id, .data$item_id, .data$sumScore) %>% 
+    summarise(meanScore=mean(.data$item_score), N=n()) %>% 
     ungroup()
   
   ssIS = respData %>%
@@ -306,6 +316,7 @@ safe_mst_data = function(db, qtpredicate, env){
   
   
   list(bkList = booklets, ssI = ssI, ssIS = ssIS, module_design_history = NULL, 
+       plt=plt,
        module_design = semi_join(module_design, routing, by=c('test_id','module_id')),
        booklet_design = select(booklet_items, .data$test_id, .data$booklet_id, .data$item_id))
   
@@ -364,12 +375,24 @@ unsafe_mst_data = function(db, qtpredicate,  env)
 
   
   # scoretab based on biid, biid will now be used in favor of booklet id's
-  scoretab = person_summary %>%
+  plt = person_summary %>%
     group_by(.data$person_id, .data$test_id, .data$biid) %>%
     summarise(booklet_score = sum(.data$mdl_sum_incl)) %>%
-    ungroup() %>%
+    ungroup() 
+  
+  scoretab = plt %>%
     group_by(.data$test_id, .data$biid, .data$booklet_score) %>%
     summarise(n = n()) %>%
+    ungroup()
+  
+  # for plotting in dexter
+  plt = respData %>%
+    filter(.data$rsp_incl == 1L) %>%
+    inner_join(plt, by=c('person_id','test_id')) %>%
+    mutate(booklet_id=paste(.data$test_id, .data$biid, sep='.')) %>%
+    rename(sumScore = 'booklet_score') %>%
+    group_by(.data$booklet_id, .data$item_id, .data$sumScore ) %>%
+    summarise(meanScore=mean(.data$item_score), N=n()) %>% 
     ungroup()
   
   
@@ -484,6 +507,7 @@ unsafe_mst_data = function(db, qtpredicate,  env)
                     })
   
   list(bkList = booklets, ssI = ssI, ssIS = ssIS, module_design_history = module_design_history, 
+       plt=plt,
        module_design = semi_join(module_design, routing, by=c('test_id','miid')) %>% rename(module_id = 'miid'),
        booklet_design = select(booklet_items, .data$test_id, booklet_id = .data$biid, .data$item_id))
 }  

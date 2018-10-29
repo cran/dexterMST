@@ -2,7 +2,7 @@
 DexterMST
 =========
 
-DexterMST is a new R package acting as a companion to dexter and adding facilities to manage and analyze data from multistage tests (MST). It includes functions for importing and managing test data, assessing and improving the quality of data through basic test and item analysis, and fitting an IRT model, all adapted to the peculiarities of MST designs. DexterMST typically works with project database files saved on disk.
+DexterMST is an R package acting as a companion to dexter and adding facilities to manage and analyze data from multistage tests (MST). It includes functions for importing and managing test data, assessing and improving the quality of data through basic test and item analysis, and fitting an IRT model, all adapted to the peculiarities of MST designs. DexterMST typically works with project database files saved on disk.
 
 Installation
 ------------
@@ -96,14 +96,14 @@ f = fit_enorm_mst(db)
 head(f)
 ```
 
-| item\_id |  item\_score|       delta|        beta|      se\_b|
-|:---------|------------:|-----------:|-----------:|----------:|
-| item01   |            1|  -1.9458047|  -2.5723980|  0.0385977|
-| item02   |            1|   0.1697511|  -0.4568422|  0.0298956|
-| item03   |            1|  -1.9278217|  -2.5544150|  0.0384445|
-| item04   |            1|   0.2018686|  -0.4247248|  0.0298913|
-| item05   |            1|   0.1164153|  -0.5101780|  0.0299112|
-| item06   |            1|  -2.0222084|  -2.6488017|  0.0392681|
+| item\_id |  item\_score|        beta|   SE\_beta|
+|:---------|------------:|-----------:|----------:|
+| item01   |            1|  -0.9378481|  0.0306780|
+| item02   |            1|  -1.8104684|  0.0335670|
+| item03   |            1|  -1.4555312|  0.0320611|
+| item04   |            1|  -1.4145089|  0.0319168|
+| item05   |            1|  -2.1264352|  0.0353192|
+| item06   |            1|  -1.7498811|  0.0332764|
 
 ``` r
 # ability estimates per person
@@ -114,12 +114,12 @@ head(abl)
 
 | booklet\_id | person\_id |  sumScore|       theta|
 |:------------|:-----------|---------:|-----------:|
-| easy        | 100        |        23|   0.5989102|
-| easy        | 1000       |        16|  -0.7682815|
-| easy        | 1001       |        20|  -0.0202340|
-| easy        | 1002       |        24|   0.8475396|
-| easy        | 1003       |        15|  -0.9460750|
-| easy        | 1008       |         5|  -2.9528321|
+| easy        | 1          |         9|  -1.0288607|
+| easy        | 10         |        23|   1.5102358|
+| easy        | 100        |        23|   1.5102358|
+| easy        | 1000       |         7|  -1.4308794|
+| easy        | 10000      |        16|   0.1809514|
+| easy        | 1001       |        13|  -0.3232153|
 
 ``` r
 # ability estimates without item Item01
@@ -132,12 +132,12 @@ head(pv)
 
 | booklet\_id | person\_id |  sumScore|         PV1|         PV2|         PV3|         PV4|         PV5|
 |:------------|:-----------|---------:|-----------:|-----------:|-----------:|-----------:|-----------:|
-| easy        | 100        |        23|   0.8919553|   1.4795550|   1.5316750|   0.9959165|   0.0851662|
-| easy        | 1000       |        16|  -0.9972769|  -1.0800259|  -0.7924014|  -0.4417996|  -0.8288912|
-| easy        | 1001       |        20|   0.2356433|  -0.3757476|   1.2436846|   0.1917415|   0.2811669|
-| easy        | 1002       |        24|  -0.1651443|   0.5234579|   0.4732917|   1.8405095|   0.3283359|
-| easy        | 1003       |        15|  -0.8886469|  -0.5163850|  -0.2848373|  -0.4779541|  -0.3582545|
-| easy        | 1008       |         5|  -2.2734765|  -3.2124985|  -2.0531300|  -2.5819154|  -2.4801953|
+| easy        | 1          |         9|  -0.4409709|  -0.2709257|  -0.8330791|  -1.0715047|  -0.4009712|
+| easy        | 10         |        23|   1.5483993|   1.0318135|   1.3107129|   0.4420585|   1.6680941|
+| easy        | 100        |        23|   1.7134969|   1.5736628|   1.5000658|   1.8495170|   0.3622951|
+| easy        | 1000       |         7|  -1.0344610|  -1.7829133|  -1.3854931|  -0.7899523|  -1.4050426|
+| easy        | 10000      |        16|   0.0497648|   0.1811482|  -0.1966962|   0.5819318|   0.4640787|
+| easy        | 1001       |        13|  -0.0745779|  -0.8048086|   0.2805427|   0.4067189|  -0.2027418|
 
 Contributing
 ------------

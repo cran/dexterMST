@@ -1,7 +1,5 @@
 
-
-
-
+##########################################
 #' Exploratory test for Differential Item Functioning
 #' 
 #' Compares two parameter objects and produces a test for DIF
@@ -15,9 +13,7 @@
 #' \dontrun{
 #' 
 #' dif = DIF_mst(db, person_property = 'test_mode')
-#' 
 #' print(dif)
-#' 
 #' plot(dif)
 #' 
 #' }
@@ -33,7 +29,7 @@ DIF_mst = function(db, person_property, predicate=NULL)
   items = get_rsp_data(db, qtpredicate = qtpredicate, env = env, columns = c('item_id', person_property)) %>% 
     distinct()
   
-  pp_vals = sort(unique(pull(items, !!person_property)))
+  pp_vals = sort(unique(items[[person_property]]))
   
   if(length(pp_vals) != 2)
     stop('person property must have two unique values in your data')
@@ -88,8 +84,8 @@ DIF_mst = function(db, person_property, predicate=NULL)
         select(.data$item_id, .data$item_score, .data$rn) %>%
         arrange(.data$rn) 
       
-      m$est$beta.cml = m$est$beta.cml[items$rn, , drop=FALSE]
-      m$est$acov.cml = m$est$acov.cml[items$rn, items$rn]
+      m$est$beta = m$est$beta[items$rn, , drop=FALSE]
+      m$est$acov.beta = m$est$acov.beta[items$rn, items$rn]
       m
     })
   }
@@ -97,11 +93,11 @@ DIF_mst = function(db, person_property, predicate=NULL)
   names(models) = pp_vals
 
   ## 4. Call overallDIF_ and PairDIF_
-  DIF_stats = dexter.OverallDIF_(models[[1]]$est$beta.cml, models[[2]]$est$beta.cml, 
-                           models[[1]]$est$acov.cml, models[[2]]$est$acov.cml)
+  DIF_stats = dexter.OverallDIF_(models[[1]]$est$beta, models[[2]]$est$beta, 
+                           models[[1]]$est$acov.beta, models[[2]]$est$acov.beta)
   
-  D = dexter.PairDIF_(models[[1]]$est$beta.cml, models[[2]]$est$beta.cml, 
-               models[[1]]$est$acov.cml, models[[2]]$est$acov.cml)
+  D = dexter.PairDIF_(models[[1]]$est$beta, models[[2]]$est$beta, 
+               models[[1]]$est$acov.beta, models[[2]]$est$acov.beta)
   
   
   

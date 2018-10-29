@@ -4,8 +4,8 @@
 \alias{create_mst_test}
 \title{Define a new multi stage test}
 \usage{
-create_mst_test(db, test_design, routing_rules, test_id, routing = c("all",
-  "last"))
+create_mst_test(db, test_design, routing_rules, test_id,
+  routing = c("all", "last"))
 }
 \arguments{
 \item{db}{output of \code{\link{open_mst_project}} or \code{\link{create_mst_project}}}

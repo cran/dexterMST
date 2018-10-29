@@ -119,7 +119,7 @@ test_that('we can calibrate', {
   
   get_items_mst(all_db) %>%
     inner_join(coef(fall), by='item_id') %>%
-    summarise(d = mean(abs(delta - beta)), se=mean(SE_b)) %>%
+    summarise(d = mean(abs(delta - beta)), se=mean(SE_beta)) %>%
     do({expect_lt(pull(.,d),pull(.,se), 'calibration delta close to true delta');.})        
   
   # predicates
@@ -142,8 +142,19 @@ test_that('we can calibrate', {
     mean() %>%
     expect_lt(.01, 'last routing, omit item without problems')
   
+ 
+  
+  est_theta = ability(get_responses_mst(all_db), flast, method='EAP',prior='Jeffreys') %>%
+    arrange(as.integer(person_id)) %>%
+    pull(theta)
+  
+
+  
+  expect_gt(cor(theta,est_theta), 0.9, 'estimate ability back')
+  
   close_mst_project(all_db)
   close_mst_project(last_db)
+  
 })
 
 

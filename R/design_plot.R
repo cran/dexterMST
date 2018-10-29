@@ -7,7 +7,7 @@
 #' 
 #' @param db dexterMST project database connection
 #' @param predicate logical predicate to select data (tests, booklets,responses) to include in the design plot
-#' @param ... further arguments to \code{\link[igraph]{plot.igraph}}, see: \code{\link[igraph]{igraph.plotting}}
+#' @param ... further arguments to \code{\link[igraph]{plot.igraph}}
 #' 
 #' @details
 #' You can use this function to plot routing designs for tests before or after

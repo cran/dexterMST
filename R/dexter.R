@@ -164,7 +164,7 @@ dexter.toDexter <- function(delta, a, first, last, re_normalize=TRUE)
   new_b[-new_first]=b
   
   ## put everything in a (minimal) parms object
-  est=list(b=new_b, a=new_a, beta.cml=delta-mean(delta))
+  est=list(b=new_b, a=new_a, beta=delta-mean(delta))
   inputs=list(ssIS=list(item_score=new_a),ssI=list(first=new_first,last=new_last))
   parms = list(est=est, inputs=inputs)
   return(parms)
@@ -214,5 +214,5 @@ toDexter = function(b, a, H=NULL, booklets, fixed_b=NULL)
     n_fixed_b=NULL
   }
   OPCML_out = dexter.toOPLM(a=n_a, b=n_b, first=n_first, last=n_last, H=n_H, fixed_b = n_fixed_b)
-  return(list(b=n_b, a=n_a, H=n_H, beta.cml=OPCML_out$delta, acov.cml=OPCML_out$cov_delta, first=n_first, last=n_last))
+  return(list(b=n_b, a=n_a, H=n_H, beta=OPCML_out$delta, acov.beta=OPCML_out$cov_delta, first=n_first, last=n_last))
 }

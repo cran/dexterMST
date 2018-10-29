@@ -267,7 +267,7 @@ What happens under the hood is _not_ simple, so we discuss it as some more lengt
 __dexterMST__ does include, as we write, generalizations of the exploratory test for DIF known from __dexter__ [@BechgerMarisDIF] and of profile analysis [@VerhelstPA]. We feel that these are a bit beyond fundamentals, and suffice with an example. 
 
 Let us add an invented item property using the `add_item_properties_mst` function and use `profile_tables_mst` to calculate the expected score on each item domain given the booklet score.
-```{r, echo=FALSE}
+```{r, echo=FALSE, message=FALSE, warning=FALSE,results='hide'}
 ## add an arbitrary item property
 item_domain=c(sample(c("A", "B", "C"), 20, replace = T), rep("B", 10), sample(c("A", "B", "C"), 20, replace = T))
 item_type = data.frame(item_id = get_items_mst(db), item_domain=item_domain)
@@ -278,7 +278,7 @@ prof = profile_tables_mst(f, dbReadTable(db, 'items'), 'item_domain')
 
 The following plot shows these expected domain-scores for each of the two booklets. 
 
-```{r, echo=FALSE, fig.align="center", fig.height=3, fig.width=6, results='hide'}
+```{r, echo=FALSE, fig.align="center", fig.height=3, fig.width=6, results='hide', message=FALSE, warning=FALSE}
 observed = dbGetQuery(db,
                       "SELECT booklet_id, 
                       person_id, item_domain, item_score 

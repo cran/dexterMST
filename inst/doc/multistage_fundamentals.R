@@ -132,7 +132,7 @@ coef(f)
 coef(f) %>% slice(1:8) %>% kable(caption='some item parameters fit on multi stage data')
 
 
-## ---- echo=FALSE---------------------------------------------------------
+## ---- echo=FALSE, message=FALSE, warning=FALSE,results='hide'------------
 ## add an arbitrary item property
 item_domain=c(sample(c("A", "B", "C"), 20, replace = T), rep("B", 10), sample(c("A", "B", "C"), 20, replace = T))
 item_type = data.frame(item_id = get_items_mst(db), item_domain=item_domain)
@@ -140,7 +140,7 @@ add_item_properties_mst(db, item_type)
 
 prof = profile_tables_mst(f, dbReadTable(db, 'items'), 'item_domain')
 
-## ---- echo=FALSE, fig.align="center", fig.height=3, fig.width=6, results='hide'----
+## ---- echo=FALSE, fig.align="center", fig.height=3, fig.width=6, results='hide', message=FALSE, warning=FALSE----
 observed = dbGetQuery(db,
                       "SELECT booklet_id, 
                       person_id, item_domain, item_score 

@@ -67,7 +67,14 @@ test_that('can import from dexter and calbration comparable to dexter', {
   fdx = fit_enorm(dxdb)
   fmst = fit_enorm_mst(db)
   
-  expect_true(df_equal(coef(fmst), coef(fdx), keys=c('item_id','item_score')),
+  coef_dx = coef(fdx)
+  # dexter < 0.8.2
+  if('SE_b' %in% colnames(coef_dx))
+  {
+    coef_dx = rename(coef_dx, SE_beta='SE_b')
+  }
+  
+  expect_true(df_equal(coef(fmst), coef_dx, keys=c('item_id','item_score')),
               'dexter and dextermst coefficients equivalent')
   
   ddx = DIF(dxdb, 'gender')

@@ -1,16 +1,20 @@
 
-#' @importFrom dexter ability
-#' @export
-dexter::ability
+.onUnload <- function (libpath) {
+  library.dynam.unload("dexterMST", libpath)
+}
 
-#' @importFrom dexter ability_tables
-#' @export
-dexter::ability_tables
 
-#' @importFrom dexter plausible_values
-#' @export
-dexter::plausible_values
 
+# #' @export
+# dexter::ability
+
+
+# #' @export
+# dexter::ability_tables
+
+
+# #' @export
+# dexter::plausible_values
 
 
 # mix default with user args
@@ -58,7 +62,7 @@ range_overlap = function(mn, mx)
 check_rule = function(rule)
 {
   
- if(names(rule)[length(rule)] != 'sym')
+  if(names(rule)[length(rule)] != 'sym')
     stop(paste('error in rule:\n',paste(rule, collapse=''),'rule should end with a module name'))
   
   mod_name = function(ch) if(names(ch) != 'sym') 'unexpected operator'

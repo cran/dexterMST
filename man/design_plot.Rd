@@ -11,7 +11,7 @@ design_plot(db, predicate = NULL, ...)
 
 \item{predicate}{logical predicate to select data (tests, booklets,responses) to include in the design plot}
 
-\item{...}{further arguments to \code{\link[igraph]{plot.igraph}}, see: \code{\link[igraph]{igraph.plotting}}}
+\item{...}{further arguments to \code{\link[igraph]{plot.igraph}}}
 }
 \description{
 Plot the routing design of mst tests

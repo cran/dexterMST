@@ -303,11 +303,11 @@ profile_tables_mst = function(parms, domains, item_property, tests=NULL)
   domains = parms$inputs$ssI %>%
     mutate(rn = row_number()) %>%
     inner_join(domains,by='item_id') %>%
-    mutate(dcat = dense_rank(.data[[!!item_property]]))
+    mutate(dcat = dense_rank(.data[[item_property]]))
   
   A = split(domains$rn, domains$dcat)
   
-  lapply(parms$mst_inputs$bkList, 
+  out = lapply(parms$mst_inputs$bkList, 
     function(bk)
     {
       if(is.null(tests) || bk$test_id %in% tests)
@@ -318,7 +318,7 @@ profile_tables_mst = function(parms, domains, item_property, tests=NULL)
         a = lapply(A, intersect, y = pull(relevant,'rn'))
         a = a[unlist(lapply(a, function(v){length(v)>0}))] 
         
-        prop = distinct(relevant, .data$dcat, .data[[!!item_property]]) %>% 
+        prop = distinct(relevant, .data$dcat, .data[[item_property]]) %>% 
           arrange(.data$dcat) 
         # hier wordt item_property data type vermangeld, iets aan doen
         p = E_profile_MS_enorm(m = parms, A = a, bk$booklet_id) #!
@@ -335,8 +335,10 @@ profile_tables_mst = function(parms, domains, item_property, tests=NULL)
         NULL
       }
     }) %>%
-    bind_rows() %>%
-    mutate(!!item_property := ip_transform(.data[[!!item_property]])) %>%
-    as.data.frame()
+    bind_rows()
+
+	out[[item_property]] = ip_transform(out[[item_property]])
+
+    as.data.frame(out)
 }
 

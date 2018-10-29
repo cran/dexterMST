@@ -448,7 +448,7 @@ Calibrate_MST <-function(booklets, a, sufI, nIter=500, fixed_b=NULL)
       H[ref,ref]=1
       EsufI[ref] = sufI[ref]
       b = b*exp(solve(H*scale,sufI-EsufI))
-      if(!all(is.finite(b))) browser()
+      #if(!all(is.finite(b))) browser()
       converged = (max(abs(EsufI-sufI))/nn<1e-10)
       
       setTxtProgressBar(pb, value=iter)
@@ -505,8 +505,7 @@ Calibrate_MST <-function(booklets, a, sufI, nIter=500, fixed_b=NULL)
   if ((!converged) && (iter=nIter)) warning(paste("Note converged in ", as.character(nIter), " iterations"))
   
   hh = toDexter(b, a, H, booklets, fixed_b = fixed_b)
-  return(list(b=b, delta=-log(b), beta.cml=hh$beta.cml, E=EsufI, O=sufI, se.cml=sqrt(diag(hh$acov.cml)),
-              acov.cml = hh$acov.cml))
+  return(list(b=b, eta=-log(b), beta=hh$beta, E=EsufI, O=sufI, se.cml=sqrt(diag(hh$acov.beta)), acov.beta = hh$acov.beta))
 }
 
 # Fit Rasch and interaction Model for one booklet
