@@ -327,9 +327,9 @@ profile_tables_mst = function(parms, domains, item_property, tests=NULL)
         as_tibble(t(p)) %>%
           add_column(test_id=bk$test_id,
                       booklet_id=gsub(paste0('^',bk$test_id,'\\.'),'',bk$booklet_id,perl=TRUE),
-                      sumScore=0:(ncol(p)-1),
+                      booklet_score=0:(ncol(p)-1),
                      .before=1) %>%
-          gather(key=!!item_property, value='expected_domain_score',-.data$test_id, -.data$booklet_id, -.data$sumScore)
+          gather(key=!!item_property, value='expected_domain_score',-.data$test_id, -.data$booklet_id, -.data$booklet_score)
       } else
       {
         NULL

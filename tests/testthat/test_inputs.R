@@ -82,10 +82,15 @@ test_that('can import from dexter and calbration comparable to dexter', {
   
   expect_equal(ddx$DIF_overall, dmst$DIF_overall, tolerance=1e-5)
   
+  pdx=profile_tables(fdx, get_items_mst(db),'situation')
+  
+  if('sumScore' %in% colnames(pdx))
+    pdx = rename(pdx, booklet_score='sumScore')
+  
   profile_tables_mst(fmst, get_items_mst(db),'situation') %>%
     select(-test_id) %>%                   
-    df_equal(profile_tables(fdx, get_items_mst(db),'situation'), keys=c('sumScore','situation') ) %>%
-    expect_true('dexter and dexterMST profile tables equivalent')
+    df_equal(pdx, keys=c('booklet_score','situation') ) %>%
+    expect_true('dexter and dexterMST profile tables not equivalent')
   
   
   dbDisconnect(db)

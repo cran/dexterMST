@@ -25,7 +25,7 @@ IntegerMatrix
           p[k]=p[k-1]+b[j]*exp(a[j]*theta[pers]);
           k++;
         }
-        u = p[k-1]*R::runif(0,1);
+        u = p[k-1] * R::runif(0,1);
         k=0;
         while (u>p[k]) {k++;}
         if (k>0) {x(pers,i) = a[first[i]+k-1];}

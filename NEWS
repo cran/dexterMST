@@ -1,6 +1,12 @@
+# dexterMST 0.1.2
+
+* minor changes to prepare for dexter version 1.0
+
+* column name sumScore, outputted by profile_tables_mst changed to booklet_score
+
 # dexterMST 0.1.1
 
-* This release mostly to prepare release of new dexter version and maintain competability
+* This release mostly to prepare release of new dexter version and maintain compatability
 
 
 # dexterMST 0.1.0

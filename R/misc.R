@@ -1,8 +1,4 @@
 
-.onUnload <- function (libpath) {
-  library.dynam.unload("dexterMST", libpath)
-}
-
 
 
 # #' @export

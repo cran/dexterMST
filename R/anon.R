@@ -522,7 +522,7 @@ Calibrate_MST <-function(booklets, a, sufI, nIter=500, fixed_b=NULL)
 #       (item_id, item_score) without the 0 score category
 # @param a: vector of item_scores arranged by item_id, item_score, also excluding the 0 score category
 # @param sufI: tally of respondents achieving each item_score
-# @param sufC: <sum(item_score * sumScore)>
+# @param sufC: <sum(item_score * booklet_score)>
 # @param nIter: max number of iterations
 
 Estim_MST <-function(a, first, last, min_scores, max_scores, sufI, sufC, scoretab, routing)

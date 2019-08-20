@@ -249,11 +249,10 @@ safe_mst_data = function(db, qtpredicate, env){
   plt = plt %>% 
     inner_join(respData, by = c('person_id','test_id', 'booklet_id')) %>%
     mutate(booklet_id = paste(.data$test_id, .data$booklet_id, sep='.')) %>%
-    rename(sumScore = 'booklet_score') %>%
-    group_by(.data$booklet_id, .data$item_id, .data$sumScore) %>% 
+    group_by(.data$booklet_id, .data$item_id, .data$booklet_score) %>% 
     summarise(meanScore=mean(.data$item_score), N=n()) %>% 
     ungroup()
-  
+    
   ssIS = respData %>%
     filter(.data$item_score > 0) %>%
     group_by(.data$item_id, .data$item_score) %>%
@@ -390,8 +389,7 @@ unsafe_mst_data = function(db, qtpredicate,  env)
     filter(.data$rsp_incl == 1L) %>%
     inner_join(plt, by=c('person_id','test_id')) %>%
     mutate(booklet_id=paste(.data$test_id, .data$biid, sep='.')) %>%
-    rename(sumScore = 'booklet_score') %>%
-    group_by(.data$booklet_id, .data$item_id, .data$sumScore ) %>%
+    group_by(.data$booklet_id, .data$item_id, .data$booklet_score ) %>%
     summarise(meanScore=mean(.data$item_score), N=n()) %>% 
     ungroup()
   

@@ -12,6 +12,6 @@ These objects are imported from other packages. Follow the links
 below to see their documentation.
 
 \describe{
-  \item{dexter}{\code{\link[dexter]{ability}}, \code{\link[dexter]{ability_tables}}, \code{\link[dexter]{plausible_values}}}
+  \item{dexter}{\code{\link[dexter]{ability}}, \code{\link[dexter]{plausible_values}}}
 }}
 

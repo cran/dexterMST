@@ -289,20 +289,25 @@ observed = dbGetQuery(db,
   group_by(booklet_id, person_id, item_domain) %>% 
   summarise(observed_score = sum(item_score)) %>% 
   group_by(booklet_id, person_id) %>% 
-  mutate(sumScore = sum(observed_score))
+  mutate(booklet_score = sum(observed_score))
 ## average
 observed_smooth = observed %>%
-  group_by(booklet_id, sumScore, item_domain) %>%
+  group_by(booklet_id, booklet_score, item_domain) %>%
   summarise(observed_score = mean(observed_score)) %>%
   ungroup()
 ## Ignore the MST design and use dexter
 prof_naive = dexter::profile_tables(f, dbReadTable(db, 'items'), 'item_domain') %>%
   mutate(booklet_id=gsub('^\\w+\\.','',booklet_id))
+
+# dexter pre 1.0
+if('sumScore' %in% colnames(prof_naive))
+  prof_naive = rename(prof_naive, booklet_score='sumScore')
+
 ## plot the results
 ggplot(full_join(prof, prof_naive, 
-                 by=c('sumScore','booklet_id','item_domain')) %>%
-         full_join(observed_smooth, by=c('sumScore','booklet_id','item_domain')),
-       aes(x = sumScore, y = expected_domain_score.x, colour = item_domain)) +
+                 by=c('booklet_score','booklet_id','item_domain')) %>%
+         full_join(observed_smooth, by=c('booklet_score','booklet_id','item_domain')),
+       aes(x = booklet_score, y = expected_domain_score.x, colour = item_domain)) +
   geom_line(size=0.3) + 
   geom_point(aes(y=observed_score), size = 0.1) +
   facet_grid(booklet_id~.,scale='free_y') + 

@@ -1,6 +1,9 @@
 globalVariables(c("."))
 
 
+#to do: is het mogelijk dat check op onmogelijke toetspaden een warning wordt?
+
+
 #' Define routing rules
 #'
 #' Define routing rules for use in \code{\link{create_mst_test}}
@@ -273,7 +276,7 @@ alter_scoring_rules_mst = function(db, rules)
   invisible(NULL)
 }
 
-
+# to do: simulation in example can be done with dexter
 #' Define a new multi stage test
 #' 
 #' Before you can enter data, dexterMST needs to know the design of your test. 
