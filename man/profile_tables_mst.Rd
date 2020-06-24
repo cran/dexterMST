@@ -4,7 +4,7 @@
 \alias{profile_tables_mst}
 \title{Profile analysis}
 \usage{
-profile_tables_mst(parms, domains, item_property, tests = NULL)
+profile_tables_mst(parms, domains, item_property)
 }
 \arguments{
 \item{parms}{An object returned by \code{\link{fit_enorm_mst}}}
@@ -12,8 +12,6 @@ profile_tables_mst(parms, domains, item_property, tests = NULL)
 \item{domains}{data.frame with column item_id and a column whose name matches `item_property`}
 
 \item{item_property}{the name of the item property used to define the domains.}
-
-\item{tests}{vector of 1 or more test_id's to limit the output. If NULL, profiles are computed for all tests.}
 }
 \description{
 Expected and observed domain scores per booklet and test score

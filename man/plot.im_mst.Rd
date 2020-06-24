@@ -4,8 +4,7 @@
 \alias{plot.im_mst}
 \title{plots for the interaction model}
 \usage{
-\method{plot}{im_mst}(x, item_id, show.observed = TRUE, curtains = 10,
-  zoom = FALSE, ...)
+\method{plot}{im_mst}(x, item_id = NULL, show.observed = TRUE, curtains = 10, zoom = FALSE, ...)
 }
 \arguments{
 \item{x}{output of \code{\link{fit_inter_mst}}}

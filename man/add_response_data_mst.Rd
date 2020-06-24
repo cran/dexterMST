@@ -7,8 +7,13 @@
 \usage{
 add_response_data_mst(db, rsp_data, auto_add_unknown_rules = FALSE)
 
-add_booklet_mst(db, booklet_data, test_id, booklet_id,
-  auto_add_unknown_rules = FALSE)
+add_booklet_mst(
+  db,
+  booklet_data,
+  test_id,
+  booklet_id,
+  auto_add_unknown_rules = FALSE
+)
 }
 \arguments{
 \item{db}{a dextermst db handle}

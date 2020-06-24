@@ -4,7 +4,13 @@
 \alias{fit_enorm_mst}
 \title{Fit the extended nominal response model on MST data}
 \usage{
-fit_enorm_mst(db, predicate = NULL, fixed_parameters = NULL)
+fit_enorm_mst(
+  db,
+  predicate = NULL,
+  fixed_parameters = NULL,
+  method = c("CML", "Bayes"),
+  nDraws = 1000
+)
 }
 \arguments{
 \item{db}{an dextermst db handle}
@@ -12,6 +18,11 @@ fit_enorm_mst(db, predicate = NULL, fixed_parameters = NULL)
 \item{predicate}{logical predicate to select data to include in the analysis, see details}
 
 \item{fixed_parameters}{data.frame with columns `item_id`, `item_score` and `beta`}
+
+\item{method}{If CML, the estimation method will be Conditional Maximum Likelihood. 
+If Bayes, a Gibbs sampler will be used to produce a sample from the posterior.}
+
+\item{nDraws}{Number of Gibbs samples when estimation method is Bayes.}
 }
 \value{
 object of type 'mst_enorm'. Can be cast to a data.frame of item parameters 
@@ -19,6 +30,7 @@ using function `coef` or used in dexter's \code{\link[dexter]{ability}} function
 }
 \description{
 Fits an Extended NOminal Response Model (ENORM) using conditional maximum likelihood (CML)
+or a Gibbs sampler for Bayesian estimation; both adapted for MST data
 }
 \details{
 You can use the predicate to include or omit responses from the analysis, e.g.
@@ -33,6 +45,10 @@ Predicates that remove complete modules from a test, e.g. \code{module_nbr !=2} 
 will cause an error and should be avoided.
 }
 \references{
-Zwitser, R. J. and Maris, G (2015); Conditional statistical inference with multistage testing designs. 
+Zwitser, R. J. and Maris, G (2015). Conditional statistical inference with multistage testing designs. 
 Psychometrika. Vol. 80, no. 1, 65-84.
+
+Koops, J. and Bechger, T. and Maris, G. (in press); Bayesian inference for multistage and other 
+incomplete designs. In Research for Practical Issues and Solutions in Computerized Multistage Testing.
+Routledge, London.
 }

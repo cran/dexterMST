@@ -112,7 +112,7 @@ design = data.frame(module_id = rep(c('Mod_2','Mod_1','Mod_3'), times=c(20,10,20
 create_mst_test(db,
                 test_design = design,
                 routing_rules = routing_rules,
-                test_id = 'ZwitserMaris')
+                test_id = 'ZwitserMaris',routing='last')
 
 
 
@@ -130,7 +130,7 @@ add_booklet_mst(db, bk2, test_id = 'ZwitserMaris', booklet_id = 'hard')
 
 ```
 
-__dexterMST__ is a new R package acting as a companion to __dexter__ [@dexter] and adding facilities to manage and analyze data from  **multi-stage tests (MST)** as they are found in educational measurement @yan2014overview. The package includes functions for importing and managing test data, assessing and improving the quality of data through basic test and item analysis, and fitting an IRT model; all adapted to the peculiarities of MST designs. Its main contribution is in the analysis of the data. It offers, in particular, the possibility to calibrate item parameters from MST using Conditional Maximum Likelihood (CML) estimation [@ZwitserMaris2015]. It has, for instance, no facilities for automatic test assembly.
+__dexterMST__ is a new R package acting as a companion to __dexter__ [@dexter] and adding facilities to manage and analyze data from  **multi-stage tests (MST)** as they are found in educational measurement [@yan2014overview]. The package includes functions for importing and managing test data, assessing and improving the quality of data through basic test and item analysis, and fitting an IRT model; all adapted to the peculiarities of MST designs. Its main contribution is in the analysis of the data. It offers, in particular, the possibility to calibrate item parameters from MST using either Conditional Maximum Likelihood (CML) estimation [@ZwitserMaris2015] or a Gibbs sampler for Bayesian inference [@koopsmst]. It has, for instance, no facilities for automatic test assembly.
 
 ## What does it do?
 
@@ -145,13 +145,13 @@ To get closer to actual work with MST, it is convenient to represent the test de
 design_plot(db,vertex.size=70,vertex.size2=30, vertex.label.cex=1.5, edge.label.cex=1.5)
 ```
 
-The tree is read from top to bottom. The root represents the first stage where all examinees take the first module (the routing test). In the second stage, examinees with a score lower than or equal to 5 on the routing test take module 2, whereas examinees with a score higher than 5 on the routing test take module 3. Every path (from the routing test to the last module) corresponds to a _booklet_. In this MST, there are two booklets: the first one, booklet M1-M2, should be relatively easy while the other, M1-M3, is more difficult. Note that the thinkness of a path indicates how many respondents took it.
+The tree is read from top to bottom. The root represents the first stage where all examinees take the first module (the routing test). In the second stage, examinees with a score lower than or equal to 5 on the routing test take module 2, whereas examinees with a score higher than 5 on the routing test take module 3. Every path (from the routing test to the last module) corresponds to a _booklet_. In this MST, there are two booklets: the first one, booklet M1-M2, should be relatively easy while the other, M1-M3, is more difficult. Note that the thickness of a path indicates how many respondents took it.
 
 Unlike CAT, MST is not all about algorithms. Most concepts, steps, procedures known from linear testing and familiar from __dexter__ are still in place, but in a modified form: some are a bit more complicated, others quite a bit, a few become meaningless. We next review the basic workflow, which is similar to __dexter__ with a few important additions, and we discuss some of the differences in more detail.
 
 ## How do I use it?
 
-There are not too many workflows to manage and analyze test data. In __dexter__, the procedure is, basically: 
+There are not too many workflows to manage and analyze test data. In __dexter__, the most common procedure is, basically: 
 
 1. Start a project
 2. Declare the scoring rules for all items
@@ -215,6 +215,8 @@ create_mst_test(db,
                 test_id = 'ZwitserMaris')
 ```
 
+Currently, we support two possible types of routing, `all` and `last`, with `all` the default. The difference lies in whether routing is based the score obtained on the last module a person took, or on all previous modules. We discuss this in detail below.
+
 ### Enter test data
 
 With the test defined, you can enter data. This can be done in two ways: booklet per booklet in wide form, or all booklets at once. The former is illustrated below; the latter works if the data is in long format (also called normalized or tidy, see [@Wickham2017]).
@@ -232,7 +234,7 @@ add_booklet_mst(db, bk2, test_id = 'ZwitserMaris', booklet_id = 'hard')
 
 ### Inspect and analyze the data
 
-Before we attempt to fit IRT models to the data, it is common practice to compute and examine carefully some simpler statistics derived from Classical Test Theory (CTT). IRT and CTT have largely overlapping ideas of what constitutes a good item or a good test, derived from common substantive foundations. If, for example, we find that the scores on an item correlate negatively with the total scores on the test, this is a sign that something is seriously amiss with the item. The presence of such problematic items will decrease the value of Cronbach's alpha, and so on.
+Before we attempt to fit IRT models to the data, it is common practice to compute and examine carefully some simpler statistics derived from Classical Test Theory (CTT). IRT and CTT have largely overlapping ideas of what constitutes a good item or a good test, derived from common substantive foundations. If, for example, we find that the scores on an item correlate negatively with the total scores on the test, this is a sign that something is seriously amiss with the item. The presence of such problematic items will decrease the value of Cronbach alpha, and so on.
 
 Unfortunately, CTT statistics are all badly influenced by the score range restrictions and dependencies inherent in MST designs. Therefore, their usefulness is severely limited, except perhaps in the first module of a test. The good news is that the __interaction model__ [@IM], which we advocated in __dexter__ as a model-driven alternative to CTT, can be adapted to MST designs, making it possible to retrieve the item-regression curves conditional on the routing design. This is best appreciated in graphical form: 
 
@@ -269,8 +271,10 @@ __dexterMST__ does include, as we write, generalizations of the exploratory test
 Let us add an invented item property using the `add_item_properties_mst` function and use `profile_tables_mst` to calculate the expected score on each item domain given the booklet score.
 ```{r, echo=FALSE, message=FALSE, warning=FALSE,results='hide'}
 ## add an arbitrary item property
-item_domain=c(sample(c("A", "B", "C"), 20, replace = T), rep("B", 10), sample(c("A", "B", "C"), 20, replace = T))
-item_type = data.frame(item_id = get_items_mst(db), item_domain=item_domain)
+
+item_type = get_items_mst(db)
+item_type$item_domain = c(sample(c("A", "B", "C"), 20, replace = T), rep("B", 10), sample(c("A", "B", "C"), 20, replace = T))
+
 add_item_properties_mst(db, item_type)
 
 prof = profile_tables_mst(f, dbReadTable(db, 'items'), 'item_domain')
@@ -297,11 +301,8 @@ observed_smooth = observed %>%
   ungroup()
 ## Ignore the MST design and use dexter
 prof_naive = dexter::profile_tables(f, dbReadTable(db, 'items'), 'item_domain') %>%
-  mutate(booklet_id=gsub('^\\w+\\.','',booklet_id))
+  mutate(booklet_id=gsub('^\\w+-','',booklet_id))
 
-# dexter pre 1.0
-if('sumScore' %in% colnames(prof_naive))
-  prof_naive = rename(prof_naive, booklet_score='sumScore')
 
 ## plot the results
 ggplot(full_join(prof, prof_naive, 
@@ -337,7 +338,7 @@ More examples are given below.
 
 ### Subsetting: using predicates
 
-__dexter__ implements a somewhat fussy but extremely flexible and general infrastructure for subsetting data via the argument `predicate`, which is available in many of the package functions. Predicates can use item properties, person covariates, booklet and item IDs, and other variables to filter the data that will be processed by the function.
+__dexter__ implements a flexible and general infrastructure for subsetting data via the `predicate` argument, which is available in many of the package functions. Predicates can use item properties, person covariates, booklet and item IDs, and other variables to filter the data that will be processed by the function.
 
 We have tried very hard to preserve this mechanism in __dexterMST__. For example, the same analysis as above but without item `item21` is done as follows:
 
@@ -347,14 +348,14 @@ f2 = fit_enorm_mst(db, item_id != 'item21')
 
 However, because of the intricate dependencies in MST designs, subsetting is not trivial. We have provided some explanations in a separate section of this document.
 
-This concludes our brief tour of a typical workflow with __dexterMST__. The rest of this document will examine in more detail CML estimation in __dexterMST__, how to specify designs with more than two stages, and some some intricacies with the use of predicates. We conclude with a brief overview of the main differences between __dexter__ and __dexterMST__.
+This concludes our brief tour of a typical workflow with __dexterMST__. The rest of this document will examine in more detail CML estimation in __dexterMST__, how to specify designs with more than two stages, and some intricacies with the use of predicates. We conclude with a brief overview of the main differences between __dexter__ and __dexterMST__.
 
 
 ## CML estimation with MST
 
-One should be careful not to apply __dexter__'s estimation routines in MST without thinking. Ordinary CML, in particular, is known to gives biased results under the circumstances (@EggenVerhelst11, @glas1988). Recently, @ZwitserMaris2015 demonstrated that CML estimation is possible, provided that one takes the design into account. Furthermore, they argued that sensible model aka those that admit CML will in general fit quite well to MST data.
+One should be careful not to apply __dexter__'s estimation routines in MST without thinking. Ordinary CML, in particular, is known to gives biased results under the circumstances (@EggenVerhelst11, @glas1988). Recently, @ZwitserMaris2015 demonstrated that CML estimation is possible, provided that one takes the design into account. Furthermore, they argued that sensible models aka those that admit CML will in general fit quite well to MST data. The same theory was used to adapt __dexter__'s Bayesian estimation method to MST [@koopsmst]. 
 
-In the three years since, the results of @ZwitserMaris2015 have not been mentioned in any of the recent edited volumes on MST, and __dexterMST__ is, to our best knowledge, the first publicly available attempt at a practical implementation. MST data are usually analyzed with _marginal maximum likelihood (MML)_, which is available in a number of R-packages, notably `mirt`. MML estimation makes assumptions about the shape of the ability distribution (usually a normal distribution is assumed), and it can produce unbiased estimates if these assumptions are fulfilled. CML, on the other hand, does not need any such assumptions at all, so it can be expected to perform well in a broader class of situations. 
+In the three years since, the results of @ZwitserMaris2015 have not been mentioned in any of the recent edited volumes on MST, and __dexterMST__ is, to our best knowledge, the first publicly available attempt at a practical implementation. MST data are usually analyzed with _marginal maximum likelihood (MML)_, which is available in a number of R-packages, such as `mirt`. MML estimation makes assumptions about the shape of the ability distribution (usually a normal distribution is assumed), and it can produce unbiased estimates if these assumptions are fulfilled. CML, on the other hand, does not need any such assumptions at all, so it can be expected to perform well in a broader class of situations. 
 
 That MML gives biased results if the ability distribution is misspecified has been shown quite convincingly by @ZwitserMaris2015. We reproduce their example here without the code but note that the data have been simulated with an ability distribution that is not normal but a mixture of two normals. Here is a density plot.
 
@@ -438,7 +439,7 @@ Note that the output from `fit_enorm_mst` can be used in dexter functions withou
 
 Response-contingent testing, to use the charming term from the past, introduces many intricate constraints and dependencies in the test design. As a result, not only the complicated techniques, but even such apparently trivial operations as removing items from the analysis or changing a scoring rule can become something of a minefield. Things are never as easy as in a linear test!
 
-In CML calibration, it is essential that we know the routing rules so, to remove some items from analysis, one needs to infer the MST design without these items. What happens internally in __dexterMST__ is that a new MST is defined for each possible score on the items that are left out, with the routing rules that follow from the ones originally specified. Consider, for example, the design that corresponding to the analysis with `item21` left out.
+In CML calibration, it is essential that we know the routing rules so, to remove some items from analysis, one needs to infer the MST design without these items. What happens internally in __dexterMST__ is that a new MST is defined for each possible score over the items that are left out, with the routing rules that follow from the ones originally specified. Consider, for example, the design that corresponding to the analysis with `item21` left out.
 
 ```{r, out.width=300,out.height=300, fig.width=5,fig.height=5}
 design_plot(db, item_id!="item21")
@@ -446,11 +447,11 @@ design_plot(db, item_id!="item21")
 
 As one can see, the tree is _split_ to accommodate the examinees who answered this item correctly, and those who did not. While more complex predicates are allowed, it will be clear that these may involve complicated bookkeeping which takes time and might slow down the analysis. 
 
-Some limitations remain, unfortunately. At the time of writing, it is not possible to change the scoring rules, except for items in the last modules of the test. As usual, the advice is to avoid this. Predicates that remove complete modules from a test, e.g. `module_id != 'Mod_1'` will cause an error and should be avoided. 
+Some limitations remain, unfortunately. At the time of writing, it is not possible to change the scoring rules after test administration, except for items in the last modules of the test. Predicates that remove complete modules from a test, e.g. `module_id != 'Mod_1'` will cause an error and should be avoided. 
 
 ## Beyond two stages: 'all' and 'last' routing
 
-So far, we have considered the simplest MST design with just two _stages_.  __dexterMST__ can handle much more complex designs involving many stages and modules. As an example, we show a diagram corresponding to one of the MSTs used in the 2018 edition of Cito's *Adaptive Central End Test (ACET)*:
+So far, we have considered the simplest MST design with just two _stages_.  __dexterMST__ can handle much more complex designs involving many stages and modules. As an example, we show a diagram corresponding to one of the MST tests used in the 2018 edition of Cito's *Adaptive Central End Test (ACET)*:
 
 ```{r, echo=FALSE, eval=FALSE}
 db = open_mst_project("/home/timo/Documents/statlib/bitbucket/acet_mst_2018_8001.db") 
@@ -463,8 +464,10 @@ design_plot(db,test_id=="RRA1")
 
 With more than two stages, two different methods of routing become possible:
 
-<span style="min-width:5ex;display:inline-block;">__Last__:</span> Use the score on the present module only.<br/>
-<span style="min-width:5ex;display:inline-block;>__All__:</span> Use the score on the present and the previous modules. 
+<span style="min-width:5ex;display:inline-block;">__Last__:</span> Use the score on the present module only.
+<br/>
+<span style="min-width:5ex;display:inline-block;">__All__:</span> Use the score on the present and the previous modules. 
+<br/>
 
 __dexterMST__ fully supports both types of routing. We do require that a routing type applies to a complete test and is specified when the test is created, for example  `create_mst_test(..., routing='last')`. In this vignette we used 'all', which is the default value. 
 
@@ -500,7 +503,7 @@ For your convenience, a function `import_from_dexter` is available that will imp
 
 </div>
 
-#References
+# References
 
 
 

@@ -2,7 +2,7 @@
 
 # internal dexter functions, slightly simplified if possible --------------
 # copied from dexter to prevent notes
-# TO DO: check in tests that they always give equal results
+# TO~DO: check in tests that they always give equal results
 
 # note: many of these can be removed when we remove the 0 categorie from dexter
 
@@ -47,9 +47,36 @@ dexter.OverallDIF_ <- function(par1,par2, cov1,cov2)
   return(list(stat=DIF_test,df=nI-1, p=DIF_p))
 }
 
+############################################################
+##    functions for reparameterizing to dexter/OPLM       ##
+############################################################
 
 # dexter first last 2 index
 dexter.first_last2indx = function(first,last) unlist(apply(data.frame(first,last),1,function(x) x[1]:x[2]))
+
+## Makes the reparameterization matrix from log(b) to beta
+dexter.makeD <- function(a,first,last)
+{
+  k = length(a)
+  D = matrix(0,k,k)
+  tel=1
+  for (i in 1:length(first))
+  {
+    for (j in 1:(last[i]-first[i]+1))
+    {
+      if (j==1){
+        D[tel,tel]=-1/a[tel]
+      }else
+      {
+        D[tel,tel-1]=-1/(a[tel-1]-a[tel])
+        D[tel,tel]=1/(a[tel-1]-a[tel])        
+      }
+      tel=tel+1
+    }
+  }
+  return(D)
+}
+
 
 # geminimaliseerde versie van dexter functie (zonder bayes)
 dexter.toOPLM = function(a, b, first, last, H=NULL, fixed_b=NULL)
@@ -74,27 +101,10 @@ dexter.toOPLM = function(a, b, first, last, H=NULL, fixed_b=NULL)
   ########################
   
   ### CML; b is a single vector
-  k=length(b)
-  ## construct linear transformation
-  DD=matrix(0,k,k)
-  tel=1
-  for (i in 1:length(first))
-  {
-    for (j in 1:(last[i]-first[i]+1))
-    {
-      if (j==1){
-        DD[tel,tel]=-1/a[tel]
-      }else
-      {
-        DD[tel,tel-1]=-1/(a[tel-1]-a[tel])
-        DD[tel,tel]=1/(a[tel-1]-a[tel])
-      }
-      tel=tel+1
-    }
-  }
-  
+  DD = dexter.makeD(a,first,last)
   if (is.null(fixed_b))
   {
+    k=length(b)
     CC=matrix(-1/k,k,k); diag(CC)=(k-1)/k
     AA=CC%*%DD
     ## calculate Deltas and asymp. variance cov matrix
@@ -124,27 +134,16 @@ dexter.toOPLM = function(a, b, first, last, H=NULL, fixed_b=NULL)
 #  It returns dexter parameters b, as well as new a, first and last with the zero category.
 dexter.toDexter <- function(delta, a, first, last, re_normalize=TRUE)
 {
-  ## Make D
-  k=length(delta)
-  DD=matrix(0,k,k)
-  tel=1
-  for (i in 1:length(first))
-  {
-    for (j in 1:(last[i]-first[i]+1))
-    {
-      if (j==1){
-        DD[tel,tel]=-1/a[tel]
-      }else
-      {
-        DD[tel,tel-1]=-1/(a[tel-1]-a[tel])
-        DD[tel,tel]=1/(a[tel-1]-a[tel])        
-      }
-      tel=tel+1
-    }
-  }
-  if (re_normalize) delta=delta-delta[1]  # normalize different
-  b=exp(solve(DD)%*%delta) # exp(logb)
-  names(b)=names(delta)
+  if(!is.matrix(delta))
+    delta = matrix(delta,nrow=1)
+  
+  if (re_normalize) 
+    delta = delta-apply(delta,1,mean) 
+
+  DDinv = solve(dexter.makeD(a,first,last))
+  b = t(exp(apply(delta,1,function(d) DDinv%*%d)))
+  
+  colnames(b)=colnames(delta)
   
   new_first=first[1]
   new_last=last[1]+1
@@ -158,13 +157,12 @@ dexter.toDexter <- function(delta, a, first, last, re_normalize=TRUE)
     }
   }
   new_a=vector("numeric",length(a)+length(first))
-  new_b=vector("numeric",length(a)+length(first))
+  new_b = matrix(1,ncol=length(a)+length(first),nrow=nrow(b))
   new_a[-new_first]=a
-  new_b[new_first]=1
-  new_b[-new_first]=b
+  new_b[,-new_first]=b
   
   ## put everything in a (minimal) parms object
-  est=list(b=new_b, a=new_a, beta=delta-mean(delta))
+  est=list(b=new_b, a=new_a, beta=drop(delta))
   inputs=list(ssIS=list(item_score=new_a),ssI=list(first=new_first,last=new_last))
   parms = list(est=est, inputs=inputs)
   return(parms)
@@ -174,14 +172,9 @@ dexter.toDexter <- function(delta, a, first, last, re_normalize=TRUE)
 
 
 
-toDexter = function(b, a, H=NULL, booklets, fixed_b=NULL)
+toDexter = function(b, a, H=NULL, first, last, fixed_b=NULL)
 {
-  items = Reduce(union, lapply(booklets, function(b){tibble(item_id = b$items, first = unlist(b$first), last = unlist(b$last))})) %>%
-    arrange(first)
-  
-  first = pull(items, first)
-  last = pull(items, last)
-  
+
   # new first,last
   n_last = last + 1:length(last)
   n_first=n_last
@@ -214,5 +207,5 @@ toDexter = function(b, a, H=NULL, booklets, fixed_b=NULL)
     n_fixed_b=NULL
   }
   OPCML_out = dexter.toOPLM(a=n_a, b=n_b, first=n_first, last=n_last, H=n_H, fixed_b = n_fixed_b)
-  return(list(b=n_b, a=n_a, H=n_H, beta=OPCML_out$delta, acov.beta=OPCML_out$cov_delta, first=n_first, last=n_last))
+  return(list(b=n_b, a=n_a, H=n_H, beta=drop(OPCML_out$delta), acov.beta=OPCML_out$cov_delta, first=n_first, last=n_last))
 }

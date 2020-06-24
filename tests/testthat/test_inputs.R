@@ -15,7 +15,7 @@ df_equal = function(a,b, keys=NULL)
     a = arrange_at(a, keys)
   }
 
-  isTRUE(all.equal(as.data.frame(a),as.data.frame(b)))
+  isTRUE(all.equal(as_tibble(a),as_tibble(b)))
 }
 
 
@@ -66,16 +66,15 @@ test_that('can import from dexter and calbration comparable to dexter', {
 
   fdx = fit_enorm(dxdb)
   fmst = fit_enorm_mst(db)
+
+  tst= inner_join(coef(fmst),coef(fdx),by=c('item_id','item_score'))
+
+
+  expect_lt(max(abs(tst$beta.x-tst$beta.y)),1e-8,
+              'dexter and dextermst beta equivalent')
   
-  coef_dx = coef(fdx)
-  # dexter < 0.8.2
-  if('SE_b' %in% colnames(coef_dx))
-  {
-    coef_dx = rename(coef_dx, SE_beta='SE_b')
-  }
-  
-  expect_true(df_equal(coef(fmst), coef_dx, keys=c('item_id','item_score')),
-              'dexter and dextermst coefficients equivalent')
+  expect_lt(max(abs(tst$SE_beta.x-tst$SE_beta.y)),1e-8,
+            'dexter and dextermst SE equivalent')
   
   ddx = DIF(dxdb, 'gender')
   dmst = DIF_mst(db, 'gender')
@@ -84,15 +83,13 @@ test_that('can import from dexter and calbration comparable to dexter', {
   
   pdx=profile_tables(fdx, get_items_mst(db),'situation')
   
-  if('sumScore' %in% colnames(pdx))
-    pdx = rename(pdx, booklet_score='sumScore')
+  pmst = profile_tables_mst(fmst, get_items_mst(db),'situation')
   
-  profile_tables_mst(fmst, get_items_mst(db),'situation') %>%
-    select(-test_id) %>%                   
-    df_equal(pdx, keys=c('booklet_score','situation') ) %>%
-    expect_true('dexter and dexterMST profile tables not equivalent')
+  tst = inner_join(pdx,pmst,by=c('booklet_score','situation'))
   
+  expect_lt(max(abs(tst$expected_domain_score.x-tst$expected_domain_score.y)),1e-8)
   
+ 
   dbDisconnect(db)
   dbDisconnect(dxdb)
   

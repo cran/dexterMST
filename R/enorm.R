@@ -2,11 +2,15 @@
 #' Fit the extended nominal response model on MST data
 #'
 #' Fits an Extended NOminal Response Model (ENORM) using conditional maximum likelihood (CML)
+#' or a Gibbs sampler for Bayesian estimation; both adapted for MST data
 #' 
 #' 
 #' @param db an dextermst db handle
 #' @param predicate logical predicate to select data to include in the analysis, see details
 #' @param fixed_parameters data.frame with columns `item_id`, `item_score` and `beta`
+#' @param method If CML, the estimation method will be Conditional Maximum Likelihood. 
+#' If Bayes, a Gibbs sampler will be used to produce a sample from the posterior.
+#' @param nDraws Number of Gibbs samples when estimation method is Bayes.
 #' 
 #' @return
 #' object of type 'mst_enorm'. Can be cast to a data.frame of item parameters 
@@ -26,57 +30,101 @@
 #' 
 #' 
 #' @references 
-#' Zwitser, R. J. and Maris, G (2015); Conditional statistical inference with multistage testing designs. 
+#' Zwitser, R. J. and Maris, G (2015). Conditional statistical inference with multistage testing designs. 
 #' Psychometrika. Vol. 80, no. 1, 65-84.
 #' 
-fit_enorm_mst = function(db, predicate = NULL, fixed_parameters = NULL)
+#' Koops, J. and Bechger, T. and Maris, G. (in press); Bayesian inference for multistage and other 
+#' incomplete designs. In Research for Practical Issues and Solutions in Computerized Multistage Testing.
+#' Routledge, London. 
+#' 
+fit_enorm_mst = function(db, predicate = NULL, fixed_parameters = NULL, method=c("CML", "Bayes"), nDraws=1000)
 {
+  method = match.arg(method)
   qtpredicate = eval(substitute(quote(predicate)))
   env = caller_env() 
-  fit_enorm_mst_(db, qtpredicate, fixed_parameters, env)
+  fit_enorm_mst_(db, qtpredicate, env, fixed_parameters, method, nDraws)
 }
 
-fit_enorm_mst_ = function(db, qtpredicate, fixed_parameters=NULL, env)
+fit_enorm_mst_ = function(db, qtpredicate, env, fixed_parameters=NULL, method=c("CML", "Bayes"), nDraws=1000)
 {
-  mst_inputs = get_mst_data(db, qtpredicate, env)
+  method = match.arg(method)
+  respData = get_mst_data(db, qtpredicate, env)
   
-  if(length(mst_inputs$bkList) == 0 )
-    stop('no responses to analyze')
+  if(NROW(respData$x) == 0)
+    stop('selection is empty, no data to analyze')
   
-  # test if connected
-  im = as.matrix(table(mst_inputs$booklet_design$item_id, 
-                       paste(mst_inputs$booklet_design$test_id, mst_inputs$booklet_design$booklet_id, sep='.')))
-  wm = crossprod(im, im)
-  diag(wm) = 0
+  plt = respData$suf_stats$plt
+  ssIS = respData$suf_stats$ssIS
   
-  visited = rep(FALSE, ncol(wm))
+  ssI = ssIS %>%
+    mutate(rn = row_number()) %>%
+    group_by(.data$item_id) %>%
+    summarise(first = min(.data$rn), last = max(.data$rn), item_max_score = max(.data$item_score)) %>%
+    ungroup() %>%
+    mutate_if(is.double, as.integer) %>%
+    arrange(.data$first) 
   
-  dfs = function(start)
+
+  routing = respData$routing %>%
+    select(-.data$test_id,-.data$booklet_id) %>%
+    arrange(.data$bid, .data$module_nbr)
+  
+  # calibration_design gives wrong results
+  # and weirdly appears to be completely unnecessary
+  #design = calibration_design(respData, ssI, ssIS, routing) %>%
+  #  arrange(bid, module_nbr, first)
+
+  design = respData$booklet_design %>%
+    inner_join(ssI, by='item_id') %>%
+    inner_join(routing, by=c('bid','module_nbr')) %>%
+    select(.data$bid, .data$module_nbr, .data$first, .data$last, .data$item_id) %>%
+    arrange(.data$bid, .data$module_nbr, .data$first)
+  
+  if(!is_connected(design$bid, design$first, design$last))
   {
-    if(!visited[start])
-    {
-      visited[start] <<- TRUE
-      vapply((1:nrow(wm))[wm[,start]>0], dfs, 0L)
-    }
-    0L
+    # check is not perfect yet, I think actual responses within booklets are needed according to Fischer
+    stop('Your design is not connected',call.=FALSE)
   }
-  dfs(1)
-  if(!all(visited)) stop('your design is not connected')
   
+  modules = design %>%
+    count(.data$bid, .data$module_nbr, name = 'nit') %>%
+    inner_join(routing, by=c('bid','module_nbr')) %>%
+    arrange(.data$bid, .data$module_nbr)
+  
+  booklets = routing %>%
+    group_by(.data$bid, .data$routing) %>%
+    arrange(.data$module_nbr) %>%
+    summarise(last_max = last(.data$module_exit_score_max), sum_max = sum(.data$module_exit_score_max), 
+              last_min = last(.data$module_exit_score_min), sum_min = sum(.data$module_exit_score_min), 
+              nmod=n()) %>%
+    ungroup() %>%
+    mutate(max_score = if_else(routing=='all', .data$last_max, .data$sum_max),
+           min_score = if_else(routing=='all', .data$last_min, .data$sum_min)) %>%
+    select(.data$bid, .data$routing, .data$nmod, .data$max_score, .data$min_score) %>%
+    arrange(.data$bid)
+  
+  scoretab = plt %>%
+    select(.data$bid, .data$booklet_score,.data$N) %>%
+    distinct(.data$bid, .data$booklet_score, .keep_all=TRUE)  %>%
+    right_join(tibble(bid = rep(booklets$bid, booklets$max_score+1),
+                      booklet_score = unlist(lapply(booklets$max_score, function(s) 0:s))),
+               by = c('bid','booklet_score')) %>%
+    mutate(N = coalesce(.data$N,0L)) %>%
+    arrange(.data$bid, .data$booklet_score)
+
+  
+  # to~do: accept range of different inputs, like in dexter
   if (!is.null(fixed_parameters))
   {
     if(length(setdiff(c('item_id','item_score','beta'), colnames(fixed_parameters))) > 0)
       stop('fixed_parameters needs to have the following columns: (item_id, item_score, beta)')
     
-    fixed_not_found = fixed_parameters %>%
-      distinct(.data$item_id) %>%
-      anti_join(mst_inputs$ssI, by='item_id') %>%
-      pull(.data$item_id)
+    fixed_not_found = setdiff(fixed_parameters$item_id, as.character(ssI$item_id) )
     
     if(length(fixed_not_found) > 0)
     {
       message('some of your fixed parameters have no match in the data, they will be ignored')
-      message(paste(unique(fixed_not_found), collapse=' '))
+      print(fixed_not_found)
     }
     fixed_parameters = fixed_parameters %>%
       arrange(.data$item_id, .data$item_score) %>%
@@ -90,11 +138,11 @@ fit_enorm_mst_ = function(db, qtpredicate, fixed_parameters=NULL, env)
                     re_normalize=FALSE)
     dx_b = dx$est$b[-dx$inputs$ssI$first]
     
-    fixed_parameters = fixed_parameters %>% 
-      add_column(b = dx_b)
+    fixed_parameters$b = dx_b
     
-    fixed_parameters = mst_inputs$ssIS %>%
+    fixed_parameters = ssIS %>%
       select(.data$item_id, .data$item_score) %>%
+      mutate(item_id = as.character(.data$item_id)) %>%
       left_join(fixed_parameters, by=c('item_id','item_score')) %>%
       arrange(.data$item_id, .data$item_score) %>%
       pull(.data$b)
@@ -105,51 +153,71 @@ fit_enorm_mst_ = function(db, qtpredicate, fixed_parameters=NULL, env)
       stop('none of your fixed parameters belong to items in the data')
   }
   
-  if(any(mst_inputs$ssIS$sufI == 0))
-  {
-    cat('score categories without responses:\n')
-    mst_inputs$ssIS %>% filter(.data$sufI == 0) %>% select(.data$item_id, .data$item_score) %>%
-      as.data.frame() %>% print(row.names=FALSE)
-    stop('Score categories without observations, see output')
-  }
+
+  calibrate = if.else(method=='CML', Calibrate_MST, Calibrate_Bayes_MST) 
   
-  res = Calibrate_MST(booklets = mst_inputs$bkList, 
-                      a = pull(mst_inputs$ssIS, 'item_score'), 
-                      sufI = pull(mst_inputs$ssIS, 'sufI'),
-                      fixed_b = fixed_parameters)
+  res = calibrate( first = ssI$first, last = ssI$last,
+                   sufI = ssIS$sufI, a = ssIS$item_score, 
+                   scoretab=scoretab,
+                   booklets=booklets,
+                   modules = modules,
+                   design = design,
+                   fixed_b = fixed_parameters,
+                   nIter=nDraws)
   
-  
-  abl_tables = new.env(parent = emptyenv())
-  abl_tables$mle = NULL
-  
+  bids = distinct(respData$routing, .data$bid, .data$test_id) %>%
+    group_by(.data$test_id) %>%
+    mutate(booklet_id=gsub(paste0('^',.data$test_id[1],'-?'),'',as.character(.data$bid),perl=TRUE))
 
   
-  out = list(mst_est = bind_cols(select(mst_inputs$ssIS, .data$item_id, .data$item_score), 
-                                 res[names(res) != 'acov.beta']), 
-             mst_inputs = mst_inputs,
-             abl_tables = abl_tables,
-             inputs = list(method = 'CML',
-                           ssI = mst_inputs$ssI %>% mutate(first = as.integer(first + rank(first) - 1L), last = as.integer(last + rank(last))),
-                           ssIS = bind_rows(mst_inputs$ssIS, 
-                                            tibble(item_id=pull(mst_inputs$ssI, 'item_id'), item_score = 0L, 
+  out = list(mst_inputs = list(ssI=ssI, ssIS=ssIS, design=inner_join(design,bids,by='bid'), 
+                               booklets=booklets, modules=modules),
+             abl_tables = list(),
+             inputs = list(method = method,
+                           ssI = mutate(ssI,
+                                        first = as.integer(first + rank(first) - 1L), 
+                                        last = as.integer(last + rank(last))),
+                           ssIS = bind_rows(ssIS, 
+                                            tibble(item_id=pull(ssI, 'item_id'), item_score = 0L, 
                                                    sufI = as.integer(NA))) %>% 
-                                    arrange(.data$item_id, .data$item_score),
-                           bkList = mst_inputs$bkList,
+                             arrange(.data$item_id, .data$item_score),
+                           plt = rename(plt, booklet_id='bid'),
                            has_fixed_parms = !is.null(fixed_parameters)))
+             
+  out$inputs$design = design %>%
+    select(booklet_id=.data$bid,.data$item_id) %>%
+    inner_join(out$inputs$ssI[,c('item_id','first','last')],by='item_id')
+
   
-  out$inputs$plt = out$mst_inputs$plt
-  out$mst_inputs$plt = NULL
-  # Prepare to label vectors/matrices
-  it_sc_lab = paste0(out$inputs$ssIS$item_id[-out$inputs$ssI$first], 
-                     "_", out$inputs$ssIS$item_score[-out$inputs$ssI$first])
   
+  if(method=='Bayes')
+  {
+    colnames(res$beta) = paste(ssIS$item_id, ssIS$item_score)
+    out$mst_est = list(beta=res$beta)
+    
+  } else
+  {
+    out$mst_est = bind_cols(select(ssIS, .data$item_id, .data$item_score), 
+                            res[names(res) != 'acov.beta'])
+  }
+  renorm = is.null(fixed_parameters) || all(is.na(fixed_parameters))
   # for compatibility with dexter
-  out$est = dexter.toDexter(out$mst_est$beta, out$mst_est$item_score, 
-                            out$mst_inputs$ssI$first, out$mst_inputs$ssI$last)$est
-  out$est$acov.beta = res$acov.beta
-  out$est$beta.cml = out$mst_est$beta # for backward compatibility
+  out$est = dexter.toDexter(out$mst_est$beta, out$mst_inputs$ssIS$item_score, 
+                            out$mst_inputs$ssI$first, out$mst_inputs$ssI$last,
+                            re_normalize=renorm)$est
   
+  if(method=='CML')
+  {
+    out$est$acov.beta = res$acov.beta
+    out$est$b = drop(out$est$b)
+  }
   class(out) = append(c('mst_enorm', 'prms') ,class(out))
+  
+  out$abl_tables$mle = ability_tables(out, standard_errors=FALSE) %>%
+    filter(is.finite(.data$theta)) 
+  
+  out$abl_tables$mle$booklet_id = ffactor(out$abl_tables$mle$booklet_id, levels=levels(routing$bid))
+  
   out
 }
 
@@ -163,22 +231,8 @@ print.mst_enorm = function(x, ...)
   invisible(msg)
 }
 
-#' extract enorm mst item parameters
-#' 
-#' @param object an 'mst_enorm' parameters object, generated by the function \code{\link{fit_enorm_mst}}
-#' @param ... other parameters are currently ignored
-#' 
-#' @return 
-#' a data.frame with columns: item_id, item_score, beta, SE_b
-#' 
-coef.mst_enorm = function(object, ...)
-{
-  # beetje lastig, namen gelijktrekken aan dexter 
-  object$mst_est %>% 
-    select(-.data$E, -.data$O, -.data$b, -.data$eta) %>% 
-    rename(SE_beta = 'se.cml') %>%
-    mutate_if(is.matrix, as.vector) %>%
-    as.data.frame()
-}
+
+
+
 
 

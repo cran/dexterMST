@@ -33,7 +33,7 @@ CREATE TABLE Booklets(
 WITHOUT ROWID;--#split#-- 
 
 CREATE TABLE Modules(
-  test_id VARCHAR(100) NOT NULL,
+    test_id VARCHAR(100) NOT NULL,
 	module_id VARCHAR(100) NOT NULL,
 	
 	PRIMARY KEY (test_id, module_id),

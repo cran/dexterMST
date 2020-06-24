@@ -1,63 +1,47 @@
 
-
-
-
-qtpredicate2sql = function(qtpredicate, db, env)
+ffactor = function (x, levels=NULL, as_int=FALSE) 
 {
-  vars = unique(c(dbListFields(db,'Items'), dbListFields(db,'Booklets'), dbListFields(db,'Persons'), 
-                  dbListFields(db,'Booklet_design'),dbListFields(db,'Responses'),dbListFields(db,'Administrations'),
-                  dbListFields(db,'Tests'),dbListFields(db,'Modules'),dbListFields(db,'Module_design')))
-  
-  if(is.list(qtpredicate))
+  if(is.null(levels))
   {
-    sql = lapply(qtpredicate, function(qtp){
-      translate_sql_(list(partial_eval(qtp,vars=vars,env=env)),con=db)
-    })
+    fast_factor(x, as_int)
   } else
   {
-    sql = translate_sql_(list(partial_eval(qtpredicate,vars=vars,env=env)),con=db)
+    fast_factor_lev(x, levels, as_int)
+  }
+}
+
+# can/likely to return unused levels
+bid = function(respData, db)
+{
+  tlev = dbGetQuery(db,'SELECT test_id FROM Tests ORDER BY test_id;')$test_id
+  if(length(tlev)==0)
+    stop('database contains no data')
+  
+  tblev = dbGetQuery(db,'SELECT test_id, booklet_id FROM Booklets ORDER BY test_id, booklet_id;')
+  
+  tblev$bid = 1:NROW(tblev)
+  lev = paste(tblev$test_id, tblev$booklet_id, sep='-')
+  if(anyDuplicated(lev))
+  {
+    tchar = max(nchar(tblev$test_id))
+    lev = sprintf(paste0('% -',tchar,'s-%s'),tblev$test_id, tblev$booklet_id)
   }
   
-  # translate_sql bug occurs for expressions like: booklet_id %in% as.character(1:4) 
-  # <SQL> `booklet_id` IN CAST((1, 2, 3, 4) AS TEXT)
-  # unfortunately regular expression functionality in R is a bit awkward 
-  # so this is extremely kludgy to solve
-  sql = lapply(sql, function(str)
+  class(tblev$bid) = 'factor'
+  levels(tblev$bid) = lev
+  
+  if(length(tlev)==1)
   {
-    split = strsplit(str,"CAST((", fixed=TRUE)[[1]]
-    if(length(split)==1) return(str)
-    split[1] = paste0(split[1],'(')
-    split[2:length(split)] = vapply(split[2:length(split)], function(s)
-    {
-      mvec = regexpr('^.+(?=\\) AS )', s, perl=TRUE)
-      vec = regmatches(s, mvec)
-      remainder = substring(s,attr(mvec,'match.length')+6)
-      mdtype = regexpr('^\\w+', remainder, perl=TRUE)
-      dtype = regmatches(remainder, mdtype)
-      remainder = substring(s, attr(mvec,'match.length') + 6 + attr(mdtype,'match.length')) 
-      
-      vec = trimws(vec)
-      if(substr(vec,1,2) == "'")
-      {
-        #pff, strings. embedded quotes are already doubled
-        vec = substr(vec, 2, nchar(vec)-1)			
-        vec = paste0("CAST('", 
-                     strsplit(vec,"(?<![^']')', ?'", perl=TRUE)[[1]],
-                     "' AS ", dtype, ')', 
-                     collapse=',') 
-      } else
-      {
-        vec = paste0('CAST(', strsplit(vec, ',')[[1]], ' AS ', dtype, ')', collapse=',') 
-      }
-      paste0(vec, remainder)
-    },"")
-    paste0(split, collapse=' ')
-  }) %>% unlist()
-  
-  if(length(sql) > 1) sql = paste0('(',sql,')',collapse=' AND ')
-  
-  return(sql)
+    out = ffactor(respData$booklet_id,levels=tblev$booklet_id)
+  } else
+  {
+    out = bid_c(respData$test_id, respData$booklet_id, tblev$test_id, tblev$booklet_id)
+  }
+  class(out) = 'factor'
+  levels(out) = lev
+  list(bid=out, bid_tb = tblev)
 }
+
 
 #' Extract response data from a dexterMST database
 #' 
@@ -77,102 +61,99 @@ get_responses_mst = function(db, predicate = NULL,
 }
 
 
+get_cte = function(db, columns)
+{
+  cte = "Responses"
+  columns = setdiff(columns, dbListFields(db, 'Responses'))
+  
+  tbls = list(
+    Scoring_rules = 'INNER JOIN Scoring_rules USING(item_id, response)',
+    Persons = 'INNER JOIN Persons USING(person_id)',
+    Items = 'INNER JOIN Items USING(item_id)',
+    Administrations = 'INNER JOIN Administrations USING(person_id, test_id, booklet_id)',
+    Tests = 'INNER JOIN Tests USING(test_id)',
+    Booklets = 'INNER JOIN Booklets USING(test_id, booklet_id)',
+    Modules = 'INNER JOIN Modules USING(test_id, module_id)',
+    Module_design = 'INNER JOIN Module_design USING(test_id, module_id, item_id)',
+    Booklet_design = 'INNER JOIN Booklet_design USING(test_id, booklet_id, module_id)')
+  
+  for(tb in names(tbls))
+  {
+    if(length(columns)==0)
+      break
+    flds = dbListFields(db, tb)
+    added = intersect(columns, flds)
+    if(length(added)>0)
+    {
+      columns = setdiff(columns, added)
+      cte = c(cte, tbls[[tb]])
+    }
+  }
+
+  paste0(cte,collapse=" ")
+}
+
+
 get_rsp_data = function(db, qtpredicate=NULL, env=NULL,
                         columns=c('person_id', 'test_id', 'booklet_id', 'item_id', 'item_score'),
                         filter_col = NULL)
 {
-  cte = " Responses INNER JOIN Scoring_rules USING(item_id, response)"
-  
-  if(!is.null(qtpredicate)){
-    used_columns = union(columns, tolower(all.vars(qtpredicate))) 
-    suppressWarnings({ sqlpredicate = qtpredicate2sql(qtpredicate, db, env)})
-    
-    # very weird, but this gives wrong results sometimes
-    #where = paste('WHERE', sqlpredicate)
-    # whereas this gives correct results seemingly
-    where = paste('WHERE CASE WHEN (', sqlpredicate, ') THEN 1 ELSE 0 END = 1')
-    #where3 = paste('WHERE (', sqlpredicate, ') is NULL')
 
-  } else
-  {
-    used_columns = columns
-    where = ''
-  }
-    
-  if(length(intersect(dbListFields(db,'Persons'),used_columns))>0) 
-    cte = c(cte, 'INNER JOIN Persons USING(person_id)')
-  if(length(intersect(dbListFields(db,'Items'),used_columns))>0) 
-      cte = c(cte, 'INNER JOIN Items USING(item_id)')
-  if(length(intersect(dbListFields(db,'Administrations'),used_columns))>0) 
-      cte = c(cte, 'INNER JOIN Administrations USING(person_id, test_id, booklet_id)')
-  if(length(intersect(dbListFields(db,'Tests'),used_columns))>0) 
-      cte = c(cte, 'INNER JOIN Tests USING(test_id)')
-  if(length(intersect(dbListFields(db,'Booklets'),used_columns))>0) 
-      cte = c(cte, 'INNER JOIN Booklets USING(test_id, booklet_id)')
-  if(length(intersect(dbListFields(db,'Modules'),used_columns))>0) 
-      cte = c(cte, 'INNER JOIN Modules USING(test_id, module_id)')
-  if(length(intersect(dbListFields(db,'Module_design'),used_columns))>0) 
-      cte = c(cte, 'INNER JOIN Module_design USING(test_id, module_id, item_id)')
-  if(length(intersect(dbListFields(db,'Booklet_design'),used_columns))>0) 
-      cte = c(cte, 'INNER JOIN Booklet_design USING(test_id, booklet_id, module_id)')
+  pred = qtpredicate_to_sql(qtpredicate, db, env)
+  
+  used_columns = union(columns,pred$db_vars)
+
+  
+  cte = get_cte(db, used_columns)
     
 
   respData = NULL
-  tryCatch(
+  if(pred$succes)
+  {
+    if(is.null(filter_col))
     {
-      if(is.null(filter_col))
-      {
-        respData = dbGetQuery(db, 
+      respData = try(dbGetQuery(db, 
                             paste("SELECT", 
                                   paste0(columns, collapse=','),
                                   "FROM",
-                                  paste0(cte,collapse=" "),
-                                  where,';'))
-      } else
-      {
-        # filtercol necessitates a predicate
-        respData = dbGetQuery(db, 
+                                  cte,
+                                  pred$where,';')),silent=TRUE)
+    } else
+    {
+      # filtercol necessitates a predicate
+      respData = try(dbGetQuery(db, 
                             paste("SELECT", 
                                   paste0(columns, collapse=','),',',
-                                  'CASE WHEN (',sqlpredicate,') THEN 1 ELSE 0 END AS ', filter_col,
+                                  'CASE WHEN (',pred$sql,') THEN 1 ELSE 0 END AS ', filter_col,
                                   " FROM ",
-                                  paste0(cte,collapse=" ")))
-      }
-      
-    },
-    error = function(e)
+                                  cte)), silent = TRUE)
+    }
+  }
+
+  
+  if(!pred$success || inherits(respData,'try-error'))
+  {
+    #print('sql failed')
+    respData = dbGetQuery(db,
+                            paste("SELECT",
+                                  paste0(used_columns, collapse=','),
+                                  " FROM ",
+                                  cte),';') 
+    if(is.null(filter_col))
     {
-      #print('error')
-      if(grepl('(syntax error)|(no such function)', e$message, ignore.case=TRUE))
-      {
-        # could be that dbplyr cannot translate the r syntax since it contains non sql functions
-        # try to read all data (no where clause) and run the select on that
-        
-        respData <<- dbGetQuery(db,
-                                paste("SELECT",
-                                      paste0(intersect(union(columns, all.vars(qtpredicate)),
-                                                       get_mst_variables(db)$name), collapse=','),
-                                      " FROM ",
-                                      paste0(cte,collapse=" ")))
-        if(is.null(filter_col))
-        {
-          respData <<- respData[eval_tidy(qtpredicate, data = respData, env=env), columns]
-        } else 
-        {
-          respData <<- respData %>% add_column(rsp_incl = as.integer(eval_tidy(qtpredicate, data = respData, env=env)))
-        }
-      } else
-      {
-        stop(e)
-      }
-    },
-    finally = NULL)
-  return(respData)
+      respData =respData[eval_tidy(qtpredicate, data = respData, env=env), columns]
+    } else 
+    {
+      respData[[filter_col]] = as.integer(eval_tidy(qtpredicate, data = respData, env=env))
+    }
+  }
+
+  respData
 }
 
 
 
-mst_safe = function(db, qtpredicate){
+mst_safe = function(db, qtpredicate,env){
   blacklist = 
     setdiff(
       Reduce(union, list(
@@ -183,15 +164,10 @@ mst_safe = function(db, qtpredicate){
         dbListFields(db, 'Scoring_rules'))),
       c('test_id', 'booklet_id')) 
   
-  if(is.list(qtpredicate))
-  {
-    vrs = unlist(lapply(qtpredicate,all.vars))
-  } else
-  {
-    vrs = all.vars(qtpredicate)
-  }
+
+  pred = qtpredicate_to_sql(qtpredicate, db, env)
   
-  return(length(intersect(tolower(vrs),tolower(blacklist))) == 0)
+  length(intersect(tolower(pred$db_vars),tolower(blacklist))) == 0
 }
 
 
@@ -200,10 +176,10 @@ get_mst_variables = function (db)
   lapply(dbListTables(db), 
          function(tbl) 
          {
-           res = DBI::dbSendQuery(db, paste("SELECT * FROM", tbl, 
+           res = dbSendQuery(db, paste("SELECT * FROM", tbl, 
                                             "WHERE 0=1;"))
-           r = DBI::dbColumnInfo(res)
-           DBI::dbClearResult(res)
+           r = dbColumnInfo(res)
+           dbClearResult(res)
            return(r)
          }) %>% 
     bind_rows() %>% 
@@ -215,18 +191,19 @@ get_mst_data = function(db, qtpredicate=NULL, env=NULL)
 {
   if(is.null(env)) env = caller_env() 
   
-  if(is.null(qtpredicate) || mst_safe(db, qtpredicate))
+  if(is.null(qtpredicate) || mst_safe(db, qtpredicate,env))
   {
-    return(safe_mst_data(db, qtpredicate, env))
+    safe_mst_data(db, qtpredicate, env)
   } else
   {
-    return(unsafe_mst_data(db, qtpredicate, env))
+    unsafe_mst_data(db, qtpredicate, env)
   }
 }
 
 
 
-safe_mst_data = function(db, qtpredicate, env){
+safe_mst_data = function(db, qtpredicate, env)
+{
   # avoids all time consuming computations for mutilating routing rules, etc.
   
   columns = c('person_id', 'test_id', 'booklet_id', 'item_id', 'item_score')
@@ -235,277 +212,189 @@ safe_mst_data = function(db, qtpredicate, env){
                           columns=columns,
                           filter_col = NULL)
   
+  respData$person_id = ffactor(respData$person_id, 
+                               levels=dbGetQuery(db, 'SELECT person_id FROM Persons ORDER BY person_id;')$person_id,
+                               as_int=TRUE)
+  respData$item_id = ffactor(respData$item_id, 
+                               levels=dbGetQuery(db, 'SELECT item_id FROM Items ORDER BY item_id;')$item_id)
   
-  plt = respData %>%
-    group_by(.data$person_id, .data$test_id, .data$booklet_id) %>%
-    summarise(booklet_score = sum(.data$item_score)) %>%
-    ungroup() 
+  bid_info = bid(respData, db)
+  respData$bid = bid_info$bid
+  respData$test_id = NULL
+  respData$booklet_id = NULL
   
-  scoretab = plt %>%
-    group_by(.data$test_id, .data$booklet_id, .data$booklet_score) %>%
-    summarise(n = n()) %>%
-    ungroup()
+  if(!is_person_booklet_sorted(respData$bid, respData$person_id))
+    respData = arrange(respData, .data$person_id, .data$bid)
   
-  plt = plt %>% 
-    inner_join(respData, by = c('person_id','test_id', 'booklet_id')) %>%
-    mutate(booklet_id = paste(.data$test_id, .data$booklet_id, sep='.')) %>%
-    group_by(.data$booklet_id, .data$item_id, .data$booklet_score) %>% 
-    summarise(meanScore=mean(.data$item_score), N=n()) %>% 
-    ungroup()
-    
-  ssIS = respData %>%
-    filter(.data$item_score > 0) %>%
-    group_by(.data$item_id, .data$item_score) %>%
-    summarise(sufI = n()) %>% 
-    ungroup()
+  respData$booklet_score = mutate_booklet_score(respData$person_id, respData$bid, respData$item_score)
   
-  item_scores = dbGetQuery(db, 'SELECT DISTINCT item_id, item_score FROM scoring_rules WHERE item_score > 0;') %>%
-    semi_join(ssIS, by='item_id')
+  max_score=dbGetQuery(db,"SELECT MAX(item_score) FROM scoring_rules;")[1,1]
   
-  ssIS = ssIS %>% 
-    right_join(item_scores, by=c('item_id','item_score')) %>%
-    mutate(sufI = coalesce(.data$sufI, 0L)) %>%
-    arrange(.data$item_id, .data$item_score)
+  suf_stats = suf_stats_nrm(respData, max_score)
   
-  ssI = ssIS %>%
-    mutate(rn = row_number()) %>%
-    group_by(.data$item_id) %>%
-    summarise(first = min(.data$rn), last = max(.data$rn), item_max_score = max(.data$item_score)) %>%
-    ungroup() %>%
-    arrange(.data$item_id)
+  bid_tb = semi_join(bid_info$bid_tb, suf_stats$plt, by='bid')
   
+  routing = dbGetQuery(db, 'SELECT * FROM Tests INNER JOIN booklet_design USING(test_id) 
+                              ORDER BY test_id, booklet_id, module_nbr;') %>%
+    inner_join(bid_tb, by=c('test_id','booklet_id'))
   
-  routing = dbGetQuery(db, 'SELECT * FROM Tests INNER JOIN booklet_design USING(test_id);') %>%
-    semi_join(scoretab, by=c('test_id','booklet_id')) %>%
-    arrange(.data$test_id, .data$booklet_id, .data$module_nbr)
+
+  booklet_design = dbGetQuery(db, 'SELECT test_id, booklet_id, item_id, module_nbr
+                              FROM booklet_design INNER JOIN module_design USING(test_id, module_id)') %>%
+    inner_join(bid_tb, by=c('test_id','booklet_id')) %>%
+    arrange(.data$bid,.data$module_nbr, .data$item_id)
   
-  module_design = dbGetQuery(db, 'SELECT test_id, module_id, item_id FROM Module_design;') 
+  booklet_design$item_id = ffactor(booklet_design$item_id, levels(respData$item_id))
   
-  booklet_items = routing %>%
-    select(.data$test_id, .data$booklet_id, .data$module_id, .data$module_nbr) %>%
-    inner_join(module_design, by=c('test_id','module_id')) %>%
-    inner_join(ssI, by = 'item_id') %>%
-    arrange(.data$test_id, .data$booklet_id, .data$module_nbr, .data$first)
-  
-  
-  booklets = lapply(split(booklet_items, paste(booklet_items$test_id, booklet_items$booklet_id,sep='.')),
-                    function(b)
-                    {
-                      route = filter(routing, 
-                                     .data$test_id == b$test_id[1] & .data$booklet_id == b$booklet_id[1])
-                      
-                      stab = scoretab %>% 
-                        filter(.data$booklet_id == b$booklet_id[1] & .data$test_id == b$test_id[1] ) %>%
-                        right_join(tibble(booklet_score = 0:sum(b$item_max_score)), by = 'booklet_score') %>%
-                        mutate(n = coalesce(n, 0L)) %>%
-                        arrange(.data$booklet_score) %>%
-                        pull(.data$n)
-                      
-                      list(booklet_id = paste(b$test_id[1], b$booklet_id[1], sep = '.'),
-                           test_id = b$test_id[1],
-                           modules = pull(route, .data$module_id),
-                           min_scores = pull(route, .data$module_exit_score_min),
-                           max_scores = pull(route, .data$module_exit_score_max),
-                           routing = pull(route,'routing')[1],
-                           items = pull(b, .data$item_id),
-                           scoretab = stab,
-                           first = split(pull(b, .data$first), b$module_nbr),
-                           last = split(pull(b, .data$last), b$module_nbr))
-                    })
-  
-  
-  list(bkList = booklets, ssI = ssI, ssIS = ssIS, module_design_history = NULL, 
-       plt=plt,
-       module_design = semi_join(module_design, routing, by=c('test_id','module_id')),
-       booklet_design = select(booklet_items, .data$test_id, .data$booklet_id, .data$item_id))
-  
+
+  list(x = respData, 
+       booklet_design= booklet_design,
+       routing = routing,
+       suf_stats = suf_stats)
 }
+
 
 
 unsafe_mst_data = function(db, qtpredicate,  env)
 {
-  columns=c('person_id', 'test_id', 'booklet_id', 'module_id', 'module_nbr','item_id', 'item_score')
+ 
+  columns=c('person_id', 'test_id', 'booklet_id', 'module_nbr','item_id', 'item_score')
   
   respData = get_rsp_data(db, qtpredicate=qtpredicate, env=env,
                           columns=columns,
                           filter_col = 'rsp_incl')
   
+  respData$person_id = ffactor(respData$person_id, 
+                               levels=dbGetQuery(db, 'SELECT person_id FROM Persons ORDER BY person_id;')$person_id,
+                               as_int=TRUE)
   
-  # take out empty person-booklets and take out excluded responses in the last module
-  respData = respData %>% 
-    group_by(.data$person_id, .data$test_id, .data$booklet_id) %>%
-    mutate(bkl_rsp_incl = sum(.data$rsp_incl), mx_module_nbr = max(.data$module_nbr)) %>%
-    ungroup() %>%
-    filter(.data$bkl_rsp_incl > 0 & (.data$module_nbr < .data$mx_module_nbr | .data$rsp_incl == 1)) %>%
-    arrange(.data$person_id, .data$test_id, .data$module_id, .data$item_id) %>%
-    select(-.data$mx_module_nbr, -.data$bkl_rsp_incl)
+  respData$item_id = ffactor(respData$item_id, 
+                             levels=dbGetQuery(db, 'SELECT item_id FROM Items ORDER BY item_id;')$item_id)
+  
+  bid_info = bid(respData, db)
+  respData$bid = bid_info$bid
+  respData$test_id = NULL
+  respData$booklet_id = NULL
+  
+  if(!is_person_booklet_sorted(respData$bid, respData$person_id))
+    respData = arrange(respData, .data$person_id, .data$bid)
+  
+  respData$booklet_score = 0L
+  
+  
+  nmod = dbGetQuery(db, 'SELECT test_id, booklet_id, COUNT(*) AS nmod FROM Booklet_design GROUP BY test_id, booklet_id;') %>%
+    inner_join(bid_info$bid_tb, by=c('test_id','booklet_id')) %>%
+    arrange(as.integer(.data$bid)) %>%
+    pull(.data$nmod)
+  
+  nmod = as.integer(c(-1L,nmod)) # 1 indexing
+  
+  dsg = make_booklets_unsafe(respData$person_id, respData$bid,
+                             respData$module_nbr, respData$item_id, respData$item_score,
+                             respData$booklet_score, respData$rsp_incl,
+                             nmod)
+  
+  
+  names(respData)[names(respData) == 'booklet_id'] = 'bid'
 
-  # define modules
-  fitem = factor(respData$item_id)
-  respData$iid = fmatch(respData$item_id, fitem)
+  respData = respData[respData$rsp_incl==1L, names(respData) !='rsp_incl']
   
-  respData = respData %>% 
-    group_by(.data$person_id, .data$test_id, .data$module_id) %>%
-    mutate(miid = paste0(.data$iid[as.logical(.data$rsp_incl)], collapse = " ")) %>%
-    ungroup()
+  max_score = dbGetQuery(db,"SELECT MAX(item_score) FROM scoring_rules;")[1,1]
   
-  fmiid = factor(respData$miid)
-  respData$miid = fmatch(respData$miid, fmiid)
+  suf_stats = suf_stats_nrm(respData, max_score)
   
-  module_design_history = respData %>% 
-    distinct(.data$test_id, .data$module_id, .data$miid, .data$item_id, .data$rsp_incl)
-  
-  module_design = module_design_history %>%
-    filter(.data$rsp_incl == 1) %>%
-    distinct(.data$test_id, .data$miid, .data$item_id)
-  
-  # one row per person per module, make unique bkl id
-  # sum excluded is set to 0 for last module
-  person_summary = respData %>%
-    group_by(.data$person_id, .data$test_id, .data$booklet_id, .data$module_nbr, .data$miid) %>%
-    summarise(mdl_rsp_incl = sum(.data$rsp_incl), mdl_rsp = n(),
-              mdl_sum_incl = sum(.data$rsp_incl * .data$item_score),
-              mdl_sum_excl = sum(.data$item_score) - sum(.data$rsp_incl * .data$item_score)) %>%
-    ungroup() %>%
-    arrange(.data$person_id, .data$test_id, .data$booklet_id, .data$module_nbr) %>%
-    group_by(.data$person_id, .data$test_id, .data$booklet_id) %>%
-    mutate(biid = paste(.data$miid, .data$mdl_sum_excl, sep='_', collapse=' ')) %>%
-    ungroup()
-
-  
-  # scoretab based on biid, biid will now be used in favor of booklet id's
-  plt = person_summary %>%
-    group_by(.data$person_id, .data$test_id, .data$biid) %>%
-    summarise(booklet_score = sum(.data$mdl_sum_incl)) %>%
-    ungroup() 
-  
-  scoretab = plt %>%
-    group_by(.data$test_id, .data$biid, .data$booklet_score) %>%
-    summarise(n = n()) %>%
-    ungroup()
-  
-  # for plotting in dexter
-  plt = respData %>%
-    filter(.data$rsp_incl == 1L) %>%
-    inner_join(plt, by=c('person_id','test_id')) %>%
-    mutate(booklet_id=paste(.data$test_id, .data$biid, sep='.')) %>%
-    group_by(.data$booklet_id, .data$item_id, .data$booklet_score ) %>%
-    summarise(meanScore=mean(.data$item_score), N=n()) %>% 
-    ungroup()
-  
-  
-  # items 
-  ssIS = respData %>%
-    filter(.data$rsp_incl == 1L & .data$item_score > 0) %>%
-    group_by(.data$item_id, .data$item_score) %>%
-    summarise(sufI = n()) %>% 
-    ungroup()
-
-  item_scores = dbGetQuery(db, 'SELECT DISTINCT item_id, item_score FROM scoring_rules WHERE item_score > 0;') %>%
-    semi_join(ssIS, by='item_id')
-  
-  ssIS = ssIS %>% 
-    right_join(item_scores, by=c('item_id','item_score')) %>%
-    mutate(sufI = coalesce(.data$sufI, 0L)) %>%
-    arrange(.data$item_id, .data$item_score)
-  
-  ssI = ssIS %>%
-    mutate(rn = row_number()) %>%
+  item_ms = suf_stats$ssIS %>%
     group_by(.data$item_id) %>%
-    summarise(first = min(.data$rn), last = max(.data$rn), max_score = max(.data$item_score)) %>%
-    ungroup() %>%
-    arrange(.data$item_id)
+    summarise(item_maxscore = max(.data$item_score))
+  
+  bdes = dbGetQuery(db,"SELECT test_id, booklet_id, module_nbr, item_id
+                            FROM booklet_design 
+                            INNER JOIN Module_design USING(test_id, module_id);")
+  
+  bdes$item_id = ffactor(bdes$item_id,levels=levels(suf_stats$ssIS$item_id))
+  
+  class(dsg$booklets_items$item_id) = 'factor'
+  levels(dsg$booklets_items$item_id)= levels(suf_stats$ssIS$item_id)
+  
+  bdes = bdes  %>% 
+    inner_join(item_ms, by='item_id') %>%
+    inner_join(bid_info$bid_tb, by=c('test_id','booklet_id')) %>%
+    select(old_bid='bid', .data$module_nbr, .data$item_id, .data$item_maxscore) %>%
+    mutate(old_bid=as.integer(.data$old_bid)) %>%
+    inner_join(dsg$booklets_items, by=c('old_bid','item_id'))
+  
+  mod_max = bdes %>%
+    group_by(.data$bid, .data$module_nbr) %>%
+    summarise(mod_maxscore = sum(.data$item_maxscore))
+  
+  routing = dbGetQuery(db,'SELECT test_id, booklet_id, routing, module_exit_score_min, module_exit_score_max, module_nbr
+                      FROM Tests INNER JOIN booklet_design USING(test_id);') %>%
+    inner_join(bid_info$bid_tb, by=c('test_id','booklet_id')) %>%
+    rename(old_bid='bid') %>%
+    mutate(old_bid=as.integer(.data$old_bid))
   
   
-  # adjust the routing rules
-  booklet_items = person_summary %>%
-    distinct(.data$test_id, .data$biid, .data$miid, .data$module_nbr) %>%
-    inner_join(module_design, by=c('test_id', 'miid')) %>%
-    inner_join(ssI, by = 'item_id') %>%
-    arrange(.data$test_id, .data$biid, .data$module_nbr, .data$first)
-  
-  
-  mdl_max_scores = module_design %>%
-    inner_join(ssI, by='item_id') %>%
-    group_by(.data$test_id, .data$miid) %>%
-    summarise(mod_max = sum(.data$max_score)) %>%
-    ungroup()
-  
-  
-  lag_mod_max = function(module_exit_score_max, mod_max)
-  {
-    # de laatste module wordt hier altijd geminimaliseerd op mod_max
-    for(i in seq_along(module_exit_score_max))
-    {
-      if(i==1)
-      {
-        module_exit_score_max[i] = pmin(module_exit_score_max[i], mod_max[i])
-      } else
-      {
-        module_exit_score_max[i] = pmin(module_exit_score_max[i], module_exit_score_max[i-1] + mod_max[i])
-      }
-    }
-    module_exit_score_max
-  }
-  
-  booklet_design = dbGetQuery(db, 
-                              'SELECT *
-                                  FROM Tests INNER JOIN Booklet_design USING(test_id)')
-  routing = person_summary %>%
-    distinct(.data$test_id, .data$booklet_id, .data$biid, .data$module_nbr, .data$miid, .data$mdl_sum_excl) %>%
-    inner_join(booklet_design, by = c('test_id','booklet_id','module_nbr')) %>%
-    inner_join(mdl_max_scores, by=c('test_id','miid')) %>%
-    group_by(.data$routing) %>%
+  routing = dsg$booklets_modules %>%
+    inner_join(routing, by=c('old_bid','module_nbr')) %>%
+    inner_join(mod_max, by=c('bid','module_nbr'))  %>%
+    arrange(.data$bid, .data$module_nbr) %>%
+    group_by(.data$bid) %>%
     do({
-      if(.[['routing']][1] == 'all')
+      tmp=.
+      if(tmp$routing[1] == 'last')
       {
-        group_by(., .data$test_id, .data$biid) %>%
-          arrange(.data$module_nbr) %>%
-          mutate(module_exit_score_min = pmax(.data$module_exit_score_min - cumsum(.data$mdl_sum_excl),0),
-                 module_exit_score_max = .data$module_exit_score_max - cumsum(.data$mdl_sum_excl)) %>%
-          mutate(module_exit_score_max = lag_mod_max(.data$module_exit_score_max, .data$mod_max)) %>%
-          ungroup()
+        tmp %>%
+          mutate(module_exit_score_min = pmax(0L, .data$module_exit_score_min - .data$mod_excluded),
+                 module_exit_score_max = pmin(.data$mod_maxscore, .data$module_exit_score_max - .data$mod_excluded))
       } else
       {
-        mutate(., 
-               module_exit_score_min = pmax(.data$module_exit_score_min - .data$mdl_sum_excl,0),
-               module_exit_score_max = pmin(.data$module_exit_score_max - .data$mdl_sum_excl, .data$mod_max))
+        # pmax(0, prblbly superfluous, you cannot get smaller than 0 imo
+        tmp = tmp %>%
+          mutate(module_exit_score_min = pmax(0L, .data$module_exit_score_min - cumsum(.data$mod_excluded)),
+                 module_exit_score_max =  .data$module_exit_score_max - cumsum(.data$mod_excluded)) 
+        
+        tmp$module_exit_score_max[1] = min(tmp$mod_maxscore[1],tmp$module_exit_score_max[1])
+        if(nrow(tmp)>1)
+        {
+          for(i in 2:nrow(tmp))
+          {
+            tmp$module_exit_score_max[i] = pmin(tmp$module_exit_score_max[i], 
+                                                tmp$module_exit_score_max[i-1] + tmp$mod_maxscore[i])
+          }
+        }
+        tmp
       }
     }) %>%
     ungroup() %>%
-    arrange(.data$test_id, .data$biid, .data$module_nbr)
-  
-  
-  #print(as.data.frame(routing %>% inner_join(check,by=c('booklet_id','biid','miid','module_nbr')) %>% arrange(biid, module_nbr )))
-  
+    select(-.data$old_bid,-.data$mod_maxscore)
 
-  booklets = lapply(split(booklet_items, paste(booklet_items$test_id, booklet_items$biid,sep='.')),
-                    function(b)
-                    {
-                      route = filter(routing, .data$test_id == b$test_id[1] & .data$biid == b$biid[1])
-                      
-                      stab = scoretab %>% 
-                        filter(.data$biid == b$biid[1] & .data$test_id == b$test_id[1] ) %>%
-                        right_join(tibble(booklet_score = 0:sum(route$mod_max)), by = 'booklet_score') %>%
-                        mutate(n = coalesce(n, 0L)) %>%
-                        arrange(.data$booklet_score) %>%
-                        pull(.data$n)
-                      
-
-                      list(booklet_id = paste(b$test_id[1], b$biid[1], sep = '.'),
-                           modules = pull(route, .data$miid),
-                           test_id = b$test_id[1],
-                           min_scores = pull(route, .data$module_exit_score_min),
-                           max_scores = pull(route, .data$module_exit_score_max),
-                           routing = pull(route, .data$routing)[1],
-                           items = pull(b, .data$item_id),
-                           scoretab = stab,
-                           first = split(pull(b, .data$first), pull(b, .data$module_nbr)),
-                           last = split(pull(b, .data$last), pull(b, .data$module_nbr)))
-                    })
+  bid_lev = routing %>%
+    group_by(.data$bid, .data$test_id, .data$booklet_id) %>%
+    summarise(pf = paste(.data$mod_excluded, collapse='-')) %>%
+    ungroup()
   
-  list(bkList = booklets, ssI = ssI, ssIS = ssIS, module_design_history = module_design_history, 
-       plt=plt,
-       module_design = semi_join(module_design, routing, by=c('test_id','miid')) %>% rename(module_id = 'miid'),
-       booklet_design = select(booklet_items, .data$test_id, booklet_id = .data$biid, .data$item_id))
-}  
+  bid_lev$str_id = paste0(bid_lev$test_id,'-', bid_lev$booklet_id, ' (',bid_lev$pf,')')
+  if(anyDuplicated(bid_lev$str_id))
+  {
+    tchar=max(nchar(bid_lev$test_id))
+    bid_lev$str_id = sprintf(paste0('% -',tchar,'s-%s (%s)'),bid_lev$test_id, bid_lev$booklet_id, bid_lev$pf)
+  }
+  
+  
+  
+  class(bdes$bid) = 'factor'
+  class(routing$bid) = 'factor'
+  class(suf_stats$plt$bid) = 'factor'
+  class(respData$bid) = 'factor'
+  
+  levels(bdes$bid) = bid_lev$str_id 
+  levels(routing$bid) = bid_lev$str_id 
+  levels(suf_stats$plt$bid) = bid_lev$str_id 
+  levels(respData$bid) = bid_lev$str_id 
+  
+  list(x = respData, 
+       booklet_design= bdes,
+       routing = routing,
+       suf_stats = suf_stats)
+  
+ }  

@@ -4,8 +4,7 @@
 \alias{plot.DIF_stats_mst}
 \title{plot method for DIF_mst}
 \usage{
-\method{plot}{DIF_stats_mst}(x, items = NULL, itemsX = items,
-  itemsY = items, ...)
+\method{plot}{DIF_stats_mst}(x, items = NULL, itemsX = items, itemsY = items, ...)
 }
 \arguments{
 \item{x}{object produced by DIF_mst}

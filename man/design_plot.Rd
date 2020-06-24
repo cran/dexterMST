@@ -4,12 +4,14 @@
 \alias{design_plot}
 \title{Plot the routing design of mst tests}
 \usage{
-design_plot(db, predicate = NULL, ...)
+design_plot(db, predicate = NULL, by_booklet = FALSE, ...)
 }
 \arguments{
 \item{db}{dexterMST project database connection}
 
 \item{predicate}{logical predicate to select data (tests, booklets,responses) to include in the design plot}
+
+\item{by_booklet}{plot and color the paths in a test per booklet}
 
 \item{...}{further arguments to \code{\link[igraph]{plot.igraph}}}
 }

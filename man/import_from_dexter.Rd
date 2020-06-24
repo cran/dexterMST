@@ -38,6 +38,7 @@ raw form but the actual response can also be 0 or 1, etc. causing a conflict.
 }
 \examples{
 \dontrun{
+library(dexter)
 dbDex = start_new_project(verbAggrRules, "verbAggression.db", 
   person_properties=list(gender="unknown"))
 add_booklet(dbDex, verbAggrData, "agg")

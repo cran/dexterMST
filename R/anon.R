@@ -1,100 +1,73 @@
 
-ROUTING = list(all = 0L, last = 1L)
-
-elsym0=function(b, a, first, last)
-{
-  elsym0C(as.double(b), 
-          as.integer(a), 
-          as.integer(first-1),
-          as.integer(last-1))
-}
-
-elsym_submerge = function(g_list, range_list, routing=c('all','last'))
-{
-  routing = match.arg(routing)
-
-  elsym_submergeC(lapply(g_list, as.double), 
-                  lapply(range_list, as.integer),
-                  ROUTING[[routing]] )
-
-}
-
-elsym_merge = function(b, a, first, last, g_list, range_list, mi1=c(-1,-1), mi2=c(-1,-1), routing=c('all','last'))
-{
-  # c-indexing
-  routing = match.arg(routing)
-  first = lapply(first, function(f){as.integer(f-1)})
-  last  = lapply(last, function(f){as.integer(f-1)})
-  elsym_mergeC(as.double(b), 
-               as.integer(a), 
-               as.list(first),
-               as.list(last),
-               lapply(g_list, as.double),
-               lapply(range_list, as.integer), 
-               as.integer(mi1 - 1),
-               as.integer(mi2 - 1), 
-               ROUTING[[routing]] )
-}
-
-E.STEP_MS<-function(b, a, booklet)
-{
-  first = lapply(booklet$first, function(f){as.integer(f-1)})
-  last  = lapply(booklet$last, function(f){as.integer(f-1)})
-  E_STEP_MSC( as.double(b),
-              as.integer(a),
-              as.list(first),
-              as.list(last),
-              as.integer(booklet$scoretab),
-              as.integer(booklet$min_scores),
-              as.integer(booklet$max_scores),
-              ROUTING[[booklet$routing]])
-}
-
-H.STEP_MS<-function(b, a, booklet)
-{
-  first = lapply(booklet$first, function(f){as.integer(f-1)})
-  last  = lapply(booklet$last, function(f){as.integer(f-1)})
-  H_STEP_MSC( as.double(b),
-              as.integer(a),
-              as.list(first),
-              as.list(last),
-              as.integer(booklet$scoretab),
-              as.integer(booklet$min_scores),
-              as.integer(booklet$max_scores),
-              ROUTING[[booklet$routing]])
-}
+ROUTING = c(all = 0L, last = 1L)
 
 ############### Miscell. ##################
 
+
 # Expected distribution on booklet given one ability theta
-pscore_mst <- function(theta, prms, booklet_id)
+# pscore_mst <- function(theta, prms, booklet_id)
+# {
+#   if (!booklet_id %in% names(prms$inputs$bkList)) stop("booklet_id in pscore_mst not found")
+#   first=prms$inputs$bkList[[booklet_id]]$first
+#   last=prms$inputs$bkList[[booklet_id]]$last
+#   routing = prms$inputs$bkList[[booklet_id]]$routing
+#   b = prms$mst_est$b
+#   a = prms$mst_est$item_score
+#   
+#   nMod=length(first)
+#   g_list=vector(mode='list', length=nMod)
+#   range_list=vector(mode='list', length=nMod)
+#   min_scores = prms$mst_inputs$bkList[[booklet_id]]$min_scores
+#   max_scores = prms$mst_inputs$bkList[[booklet_id]]$max_scores
+#   for (m in 1:nMod)
+#   {
+#     g_list[[m]]=elsym0(b, a, first[[m]], last[[m]])
+#     range_list[[m]]=min_scores[m]:max_scores[m]
+#   }
+#   g=elsym_submerge(g_list,range_list,routing)
+#   
+#   p=rep(0, length(g))
+#   for (s in 1:length(g))
+#   {
+#     p[s]=g[s]*exp((s-1)*theta)
+#   }
+#   return(p/sum(p))
+# }
+
+# expected score distribution given ability theta (possibly a vector)
+# for a single booklet
+.pscore_mst = function(theta, a, b, first, last, modules, routing)
 {
-  if (!booklet_id %in% names(prms$inputs$bkList)) stop("booklet_id in pscore_mst not found")
-  first=prms$inputs$bkList[[booklet_id]]$first
-  last=prms$inputs$bkList[[booklet_id]]$last
-  routing = prms$inputs$bkList[[booklet_id]]$routing
-  b = prms$mst_est$b
-  a = prms$mst_est$item_score
+  mxsc = if(routing=='last') sum(modules$module_exit_score_max) else last(modules$module_exit_score_max)
   
-  nMod=length(first)
-  g_list=vector(mode='list', length=nMod)
-  range_list=vector(mode='list', length=nMod)
-  min_scores = prms$mst_inputs$bkList[[booklet_id]]$min_scores
-  max_scores = prms$mst_inputs$bkList[[booklet_id]]$max_scores
-  for (m in 1:nMod)
-  {
-    g_list[[m]]=elsym0(b, a, first[[m]], last[[m]])
-    range_list[[m]]=min_scores[m]:max_scores[m]
-  }
-  g=elsym_submerge(g_list,range_list,routing)
+  g = elsym_C(ROUTING[[routing]], b, a, as.integer(first-1L), as.integer(last-1L),
+                modules$module_exit_score_min, modules$module_exit_score_max,
+                modules$nit, mxsc)
+
   
-  p=rep(0, length(g))
-  for (s in 1:length(g))
-  {
-    p[s]=g[s]*exp((s-1)*theta)
-  }
-  return(p/sum(p))
+  p = exp(theta %*% t(0:mxsc)) %*% diag(as.vector(g))
+  diag(1/rowSums(p),nrow(p)) %*% p
 }
+
+# e.g. p_score user level function
+pscore_mst = function(f, test_id, booklet_id)
+{
+  a = f$mst_inputs$ssIS$item_score
+  b = f$mst_est$b
+  # dit mag netter, parms object beetje aanpassen
+  design = filter(f$mst_inputs$design,
+                  .data$test_id==!!test_id & .data$booklet_id==!!booklet_id)
+  
+  bid = design$bid[1]
+  modules = filter(f$mst_inputs$modules, .data$bid==!!bid)
+  routing = modules$routing[1]
+  
+  function(theta)
+  {
+    .pscore_mst(theta,a,b,design$first,design$last,modules,routing) 
+  }
+}
+
 
 E_score_mst <- function(theta, prms, booklet_id)
 {
@@ -106,347 +79,73 @@ E_score_mst <- function(theta, prms, booklet_id)
 
 
 
-############### matrix of item-total regressions per booklet ################
-# RAsch and IM
-# This one for a normal booklet with no routing
-ittotmatIM_MS_none<-function (b, c, a, first, last) 
-{
-  ms=sum(a[last])
-  mm=sum((last+1)-first)
-  pi=matrix(0, mm,(ms+1))
-  logb = log(b)
-  logc = log(c)
-  for (s in 0:ms)
-  {
-    eta = exp(logb + (a * s) * logc)
-    g = elsym0(eta, a, first, last)
-    k = 1
-    for (it in 1:length(first)) 
-    {
-      gi = elsym0(eta, a, first[-it], last[-it])
-      for (j in first[it]:last[it]) 
-      {
-        idx = s + 1 - a[j]
-        if ((idx > 0) & (idx <= length(gi))) 
-        {
-          pi[k, s + 1] = exp(log(eta[j]) + log(gi[idx]) - log(g[s + 1]))
-        }
-        k = k + 1
-      }
-    }
-  }
-  return(pi)
-}
-
-#Last routing
-ittotmatIM_MS_last = function(b, c, a, first, last, min_scores, max_scores) 
-{
-  nMod=length(first) 
-  g_list=vector(mode='list', length=nMod)
-  range_list=vector(mode='list', length=nMod)
-  mm=0; ms=1
-  for (m in 1:nMod)
-  {
-    mm=mm+sum(last[[m]]-first[[m]]+1)
-    ms=ms+sum(a[last[[m]]])
-  }
-  pi=matrix(0, mm, ms)
-  min_score=sum(min_scores)
-  max_score=sum(max_scores)
-  
-  logb = log(b); logc = log(c)
-  for (s in min_score:max_score)
-  {
-    eta = exp(logb + (a * s) * logc)
-    for (m in 1:nMod)
-    {
-      g_list[[m]]=elsym0(eta, a, first[[m]], last[[m]])
-      range_list[[m]]=min_scores[m]:max_scores[m]
-    }
-    g=elsym_submerge(g_list,range_list,"last")
-    k=1
-    for (m in 1:nMod)
-    {
-      for (it in 1:length(first[[m]])) 
-      {
-        mx_it=a[last[[m]][it]]
-        range_list[[m]]=(min_scores[m]:max_scores[m]-mx_it)[which((min_scores[m]:max_scores[m]-mx_it)>=0)]
-        g_list[[m]]=elsym0(eta, a, first[[m]][-it], last[[m]][-it]) 
-        gi=elsym_submerge(g_list,range_list,"last")
-        for (j in first[[m]][it]:last[[m]][it]) 
-        {
-          idx = s + 1 - a[j]
-          if ((idx > 0) & (idx <= length(gi))&(g[s+1]>0)) 
-          {
-            pi[k, s + 1] = exp(log(eta[j]) + log(gi[idx]) - log(g[s + 1]))
-          }
-          k = k + 1
-        }
-      }
-      range_list[[m]]=min_scores[m]:max_scores[m]
-      g_list[[m]]=elsym0(eta,a,first[[m]],last[[m]])
-    }
-  }
-  return(pi)
-}
-
-### All routing
-ittotmatIM_MS_all = function(b, c, a, first, last, min_scores, max_scores) 
-{
-  nMod = length(first) 
-  g_list=vector(mode='list', length=nMod)
-  range_list=vector(mode='list', length=nMod)
-  mm=0; ms=1
-  for (m in 1:nMod)
-  {
-    mm=mm+sum(last[[m]]-first[[m]]+1)
-    ms=ms+sum(a[last[[m]]])
-  }
-  pi=matrix(0, mm, ms)
-  min_score=0
-  max_score=max_scores[nMod]
-  
-  logb = log(b); logc = log(c)
-  for (s in min_score:max_score)
-  {
-    eta = exp(logb + (a * s) * logc)
-    for (m in 1:nMod)
-    {
-      g_list[[m]]=elsym0(eta, a, first[[m]], last[[m]])
-      range_list[[m]]=min_scores[m]:max_scores[m]
-    }
-    g=elsym_submerge(g_list,range_list,"all")
-    k=1
-    for (m in 1:nMod)
-    {
-      for (it in 1:length(first[[m]])) 
-      {
-        mx_it=a[last[[m]][it]]
-        for (j in nMod:m){
-          range_list[[j]]=(min_scores[j]:max_scores[j]-mx_it)[which((min_scores[j]:max_scores[j]-mx_it)>=0)]
-        }
-        g_list[[m]]=elsym0(eta, a, first[[m]][-it], last[[m]][-it]) 
-        gi=elsym_submerge(g_list,range_list,"all")
-        for (j in first[[m]][it]:last[[m]][it]) 
-        {
-          idx = s + 1 - a[j]
-          if ((idx > 0)&(idx <= length(gi))&(g[s+1]>0)) 
-          {
-            pi[k, s + 1] = exp(log(eta[j]) + log(gi[idx]) - log(g[s + 1]))
-          }
-          k = k + 1
-        }
-      }
-      range_list[[m]]=min_scores[m]:max_scores[m]
-      g_list[[m]]=elsym0(eta, a, first[[m]], last[[m]])
-    }
-  }
-  return(pi)
-}
-
-######### Only ENORM
-# No routing
-ittotmat_MS_none<-function (b, a, first, last) 
-{
-  ms=sum(a[last])
-  mm=sum((last+1)-first)
-  pi=matrix(0, mm,(ms+1))
-  for (s in 0:ms)
-  {
-    g = elsym0(b, a, first, last)
-    k = 1
-    for (it in 1:length(first)) 
-    {
-      gi = elsym0(b, a, first[-it], last[-it])
-      for (j in first[it]:last[it]) 
-      {
-        idx = s + 1 - a[j]
-        if ((idx > 0) & (idx <= length(gi))) 
-        {
-          pi[k, s + 1] = b[j]*gi[idx]/g[s+1]
-        }
-        k = k + 1
-      }
-    }
-  }
-  return(pi)
-}
-
-# Last routing
-ittotmat_MS_last<-function(b, a, first, last, min_scores, max_scores)
-{
-  nMod=length(first)
-  g_list=vector(mode='list', length=nMod)
-  range_list=vector(mode='list', length=nMod)
-  nrow_pi=0; ncol_pi=1
-  for (m in 1:nMod)
-  {
-    g_list[[m]]=elsym0(b, a, first[[m]], last[[m]])
-    range_list[[m]]=min_scores[m]:max_scores[m]
-    ncol_pi=ncol_pi+sum(a[last[[m]]])
-    nrow_pi=nrow_pi+sum(last[[m]]-first[[m]]+1)
-  }
-  g=elsym_submerge(g_list,range_list,"last")
-  pi=matrix(0,nrow_pi,ncol_pi)
-  
-  k=1
-  for (m in 1:nMod)
-  {
-    for (it in 1:length(first[[m]]))
-    {
-      mx_it=a[last[[m]][it]]
-      range_list[[m]]=(min_scores[m]:max_scores[m]-mx_it)[which((min_scores[m]:max_scores[m]-mx_it)>=0)]
-      g_list[[m]]=elsym0(b,a,first[[m]][-it],last[[m]][-it]) 
-      gi=elsym_submerge(g_list,range_list,"last")
-      for (j in first[[m]][it]:last[[m]][it])
-      {
-        for (s in (sum(min_scores)+1):sum(max_scores)) 
-        {
-          idx=s+1-a[j]
-          if ((g[s+1]>0)&(idx>0)&(idx<=length(gi))){
-            pi[k,s+1] = pi[k,s+1] + gi[idx]*b[j]/g[s+1]
-          }
-        }
-        k=k+1
-      }
-    }
-    range_list[[m]]=min_scores[m]:max_scores[m]
-    g_list[[m]]=elsym0(b,a,first[[m]],last[[m]])
-  }
-  return(pi)
-}
-
-# All routing
-ittotmat_MS_all<-function(b, a, first, last, min_scores, max_scores)
-{
-  nMod = length(first)
-  g_list=vector(mode='list', length=nMod)
-  range_list=vector(mode='list', length=nMod)
-  nrow_pi=0; ncol_pi=1
-  for (m in 1:nMod)
-  {
-    g_list[[m]]=elsym0(b, a, first[[m]], last[[m]])
-    range_list[[m]]=min_scores[m]:max_scores[m]
-    ncol_pi=ncol_pi+sum(a[last[[m]]])
-    nrow_pi=nrow_pi+sum(last[[m]]-first[[m]]+1)
-  }
-  g=elsym_submerge(g_list,range_list,"all")
-  
-  pi=matrix(0,nrow_pi,ncol_pi)
-  k=1
-  for (m in 1:nMod)
-  {
-    for (it in 1:length(first[[m]]))
-    {
-      mx_it=a[last[[m]][it]]
-      for (j in nMod:m){
-        range_list[[j]]=(min_scores[j]:max_scores[j]-mx_it)[which((min_scores[j]:max_scores[j]-mx_it)>=0)]
-      }
-      g_list[[m]]=elsym0(b, a, first[[m]][-it], last[[m]][-it]) 
-      gi=elsym_submerge(g_list,range_list,"all")
-      for (j in first[[m]][it]:last[[m]][it])
-      {
-        for (s in 1:max_scores[nMod]) 
-        {
-          idx=s+1-a[j]
-          if ((g[s+1]>0)&(idx>0)){
-            pi[k,s+1] = pi[k,s+1] + gi[idx]*b[j]/g[s+1]
-          }
-        }
-        k=k+1
-      }
-    }
-    range_list[[m]]=min_scores[m]:max_scores[m]
-    g_list[[m]]=elsym0(b, a, first[[m]], last[[m]])
-  }
-  return(pi)
-}
-
-## This function is important because ittot_mat or all other
-# that loop over modules do not return the 
-# parameters in the original order.
-first_last2index_MST<-function(first,last, routing="all")
-{
-  indx_set=NULL
-  nMod=length(first)
-  for (m in 1:nMod)
-  {
-    for (i in 1:length(first[[m]]))
-    {
-      indx_set=c(indx_set,first[[m]][i]:last[[m]][i])
-    }
-  }
-  return(indx_set)
-}
-
 ############### Calibration functions
 
 
 
 # Enorm calibration of MST booklets
-# @param booklets list, each element is a list representing a single booklet (= unique route through a test)
-# each booklet contains
-#   modules: integer vector of module indexes
-#   min_scores, 
-#   max_scores: integer vectors denoting the range of possible scores 
-#     after each module in this booklet on basis of routing rules
-#   routing: type of routing, for now always 'all'
-#   items: character vector, id's of items in the booklet
-#   scoretab: integer vector denoting the number of respndents to achieve each score,
-#     the indexes correspond to scores, range always from 0 to the sum of the maximum scores of the items
-#     (so independent of routing and independent of impossible scores in case of weird weights)
-#   first,
-#   last: list of integer vectors, on for each module, denoting first and last postion in the score table ordered by 
-#       (item_id, item_score) without the 0 score category
-# @param a: vector of item_scores arranged by item_id, item_score, also excluding the 0 score category
-# @param sufI: tally of respondents achieving each item_score
-# @param nIter: max number of iterations. Default is 500
+
 # @param fixed_b: vector indicating which parameters re fixed (value) and free to estimate (=NA)
 # Default value of fixed_b is NULL which means no fixed parameters
-Calibrate_MST <-function(booklets, a, sufI, nIter=500, fixed_b=NULL)
+Calibrate_MST = function(first, last, a, sufI, scoretab, booklets, design, modules, nIter=500, fixed_b=NULL)
 {
   b=rep(1,length(sufI))
-  nb=length(booklets)
-  EsufI=sufI
-  ref=1
+  EsufI = rep(0, length(sufI))
+  H = matrix(0,length(a),length(a))
+  ref_cat=1
+
+  design$cfirst = as.integer(design$first-1L)
+  design$clast = as.integer(design$last-1L)
+  booklets$routing = ROUTING[booklets$routing]
   
   if (is.null(fixed_b)) # if no fixed parameters
   {
-    nn=sum(sufI)
+    nn = sum(sufI)
       ### Implicit equations
     converged=FALSE
-    iter=0
+    iter = 0
     pb = txtProgressBar(min=0, max=nIter) 
+    #plot(c(0,500),c(sum(sufI)-300,sum(sufI)+300),type='n',xlab='iteratie EM',ylab='sum EsufI')
+    #abline(h=sum(sufI))
     while ((!converged) && (iter<=nIter))
     {
-      iter = iter+1
-      EsufI = EsufI-EsufI
-      for (bl in 1:nb) EsufI = EsufI + E.STEP_MS(b, a, booklets[[bl]])
+      iter = iter + 1
+
+      Expect(b, a, design$cfirst, design$clast, 
+             booklets$max_score, booklets$nmod, booklets$routing,
+             modules$nit, modules$module_exit_score_min, modules$module_exit_score_max,
+             scoretab$N, EsufI)
+      #points(iter,sum(EsufI))
+      # plot(sufI,EsufI)
+      # abline(0,1)
+      # plot(sufI-EsufI)
+      # abline(h=0)
+      # browser()
+
       b = b*sufI/EsufI
-      converged = ((max(abs(sufI-EsufI))/nn) < 1e-04)
+      converged = ((max(abs(sufI-EsufI))/nn) < 1e-05)
       setTxtProgressBar(pb, value=iter)
-    }
   
-      ### Newton-Raphson 
-    H=matrix(0,length(a),length(a))
+    }
+    # identify
+    b = b/(b[ref_cat]^(a/a[ref_cat]))
+
+    ### Newton-Raphson 
     converged=FALSE
     scale=2
     while ((!converged) && (iter<=nIter))
     {
       iter=iter+1
-      EsufI=EsufI-EsufI
-      H=H-H
       
-      for (bl in 1:nb)
-      {
-        EsufI = EsufI + E.STEP_MS(b, a, booklets[[bl]])
-        if (length(booklets[[bl]]$items)>2){
-          H     = H     + H.STEP_MS(b, a, booklets[[bl]]) 
-        }
-      }
-      H[ref,]=0; H[,ref]=0
-      H[ref,ref]=1
-      EsufI[ref] = sufI[ref]
+      NR(b, a, design$cfirst, design$clast, 
+         booklets$max_score, booklets$nmod, booklets$routing,
+         modules$nit, modules$module_exit_score_min, modules$module_exit_score_max,
+         scoretab$N, EsufI, H)
+      
+      H[ref_cat,]=0; H[,ref_cat]=0
+      H[ref_cat,ref_cat]=1
+      EsufI[ref_cat]=sufI[ref_cat]
+      
       b = b*exp(solve(H*scale,sufI-EsufI))
       #if(!all(is.finite(b))) browser()
       converged = (max(abs(EsufI-sufI))/nn<1e-10)
@@ -468,29 +167,29 @@ Calibrate_MST <-function(booklets, a, sufI, nIter=500, fixed_b=NULL)
     while ((!converged) && (iter<=nIter))
     {
       iter = iter+1
-      EsufI = EsufI-EsufI
-      for (bl in 1:nb) EsufI = EsufI = EsufI + E.STEP_MS(b, a, booklets[[bl]])
+      
+      Expect(b, a, design$cfirst, design$clast, 
+             booklets$max_score, booklets$nmod, booklets$routing,
+             modules$nit, modules$module_exit_score_min, modules$module_exit_score_max,
+             scoretab$N, EsufI)
+      
       b[update_set] = b[update_set]*sufI[update_set]/EsufI[update_set]
       converged=(max(abs(sufI[update_set]-EsufI[update_set]))/nn<1e-04)
       setTxtProgressBar(pb, value=iter)
     }
     
     ### Newton-Raphson 
-    H=matrix(0,length(a),length(a))
     converged=FALSE
     scale=2
     while ((!converged) && (iter<=nIter))
     {
       iter=iter+1
-      EsufI=EsufI-EsufI
-      H=H-H
-      for (bl in 1:nb)
-      {
-        EsufI = EsufI + E.STEP_MS(b, a, booklets[[bl]])
-        if (length(booklets[[bl]]$items)>2){
-          H     = H     + H.STEP_MS(b, a, booklets[[bl]])
-        }
-      }
+      
+      NR(b, a, design$cfirst, design$clast, 
+         booklets$max_score, booklets$nmod, booklets$routing,
+         modules$nit, modules$module_exit_score_min, modules$module_exit_score_max,
+         scoretab$N, EsufI, H)
+      
       H[fixed_set,]=0
       H[,fixed_set]=0
       diag(H)[fixed_set]=1
@@ -502,11 +201,59 @@ Calibrate_MST <-function(booklets, a, sufI, nIter=500, fixed_b=NULL)
     }
     close(pb)
   }
-  if ((!converged) && (iter=nIter)) warning(paste("Note converged in ", as.character(nIter), " iterations"))
+  if ((!converged) && (iter==nIter)) warning(paste("Not converged in ", nIter, " iterations"))
   
-  hh = toDexter(b, a, H, booklets, fixed_b = fixed_b)
+  hh = toDexter(b, a, H, first, last, fixed_b = fixed_b)
   return(list(b=b, eta=-log(b), beta=hh$beta, E=EsufI, O=sufI, se.cml=sqrt(diag(hh$acov.beta)), acov.beta = hh$acov.beta))
 }
+
+
+
+# scoretab: data.frame: booklet_id, booklet_score, N; ordered by booklet_id, booklet_score; N=0 included
+# impossible scores included
+# fixed_b: NULL or vector of length(b) with NA's for free parameters
+Calibrate_Bayes_MST = function(first, last, a, sufI, scoretab, booklets, design, modules, nIter=1000L, fixed_b=NULL)
+{
+  from = 300L
+  step = 1L
+
+  bfirst = as.integer(design$first -1L)
+  blast = as.integer(design$last -1L)
+
+  # item booklet index  
+  design$bnr = dense_rank(design$bid)
+  itb = as.integer(arrange(design, .data$first,.data$bnr)$bnr-1L)
+  #nbr of booklets per item
+  itnb = design %>% count(.data$first) %>% arrange(.data$first) %>% pull(.data$n)
+
+
+  booklets$routing = ROUTING[booklets$routing]
+  
+  # b is consumed in the process
+  b = exp(runif(length(sufI), -1, 1))
+  
+  fixed_b_vec = fixed_b
+  if(is.null(fixed_b))
+    fixed_b_vec = rep(NA_real_, length(b))
+
+  bx = calibrate_Bayes(a, as.integer(first-1L), as.integer(last-1L),
+                       bfirst, blast, booklets$max_score, booklets$min_score,booklets$nmod, booklets$routing,
+                      modules$nit, modules$module_exit_score_min, modules$module_exit_score_max,
+                      itb, itnb,
+                      sufI, scoretab$N, b, fixed_b_vec, 
+                      from, step, as.integer(nIter))
+  
+
+  bx = apply(bx,2, toDexter, a=a,first=first,last=last,fixed_b=fixed_b)
+  beta = do.call(rbind,lapply(lapply(bx,'[[','beta'),drop))
+  
+  return(list(beta=beta, first=bx[[1]]$first, last=bx[[1]]$last))
+  
+}
+
+
+
+
 
 # Fit Rasch and interaction Model for one booklet
 # All arguments for one booklet locally:
@@ -527,32 +274,53 @@ Calibrate_MST <-function(booklets, a, sufI, nIter=500, fixed_b=NULL)
 
 Estim_MST <-function(a, first, last, min_scores, max_scores, sufI, sufC, scoretab, routing)
 {
+  # to~do: different inputs more like enorm, than this pre-amble can be omitted
+  cfirst = as.integer(unlist(first)-1L)
+  clast = as.integer(unlist(last)-1L)
+  crouting = ROUTING[routing]
+  
+  if(routing=='all')
+  {
+    bmax = last(max_scores)
+    bmin = last(min_scores)
+  } else
+  {
+    bmax = sum(max_scores)
+    bmin = sum(min_scores)
+  }  
+  
+  mnit = sapply(first, length)
+  
+
+  out = list(routing=routing, regs=list())
+  
   nMod = length(first)
   unlist_first= unlist(first, use.names = F)
   unlist_last= unlist(last, use.names = F)
+  indx_ic=order(unlist_first)
   nI=length(unlist_first)
   b=rep.int(1,length(sufI))
   EsufI=sufI
   mm=sum(scoretab)
-  indx_ic=order(unlist_first)
-  
-  C = rep(1:nI, unlist_last-unlist_first+1)
+
   ic=rep.int(1,nI)
+  ncat = unlist_last - unlist_first+1L
+  
   var.ic=vector("numeric", nI)
   HRM=matrix(0,length(b),length(b))
   
+  # to~do: kan allemaal veel handiger
+
   ## Rasch Model
+
   
   ## Implicit Equations
   converged=2
   while (converged>0.001)
   {
-    if (routing=="last") pi_mat = ittotmat_MS_last(b, a, first, last, 
-                                                  min_scores, max_scores)
-    if (routing=="all")  pi_mat = ittotmat_MS_all(b, a, first, last, 
-                                                  min_scores, max_scores)
-    indx_set=first_last2index_MST(first,last)
-    EsufI[indx_set]=pi_mat%*%scoretab 
+    pi_mat = ittotmat_mst(b, a, rep(ic,ncat), cfirst, clast, bmin, bmax, nMod, crouting,
+                          mnit, min_scores, max_scores)
+    EsufI=pi_mat%*%scoretab 
     b=b*sufI/EsufI
     converged=(max(abs(sufI-EsufI))/mm)
   }
@@ -563,45 +331,44 @@ Estim_MST <-function(a, first, last, min_scores, max_scores, sufI, sufC, scoreta
   while(converged>0.0001)
   {
     converged=-1
-    if (routing=="last") pi_mat =ittotmat_MS_last(b, a, first, last, 
-                                                  min_scores, max_scores)
-    if (routing=="all")  pi_mat = ittotmat_MS_all(b, a, first, last, 
-                                                  min_scores, max_scores)
+    pi_mat = ittotmat_mst(b, a, rep(ic,ncat), cfirst, clast, bmin, bmax, nMod, crouting,
+                          mnit, min_scores, max_scores)
     pi_mat[is.na(pi_mat)]=0
-    indx_set=first_last2index_MST(first,last)
-    pi_mat=pi_mat[indx_set,]
+
     for (m in 1:nMod)
     {
       for (i in 1:length(first[[m]]))
       {
-        upd_set=first[[m]][i]:last[[m]][i]
-        pi=pi_mat[upd_set,,drop=FALSE]
-        E=sufI[upd_set]-pi%*%scoretab
-        H=-pi%*%tcrossprod(diag(scoretab),pi) #(diag(scoretab)%*%t(pi)) 
-        diag(H)=pi%*%scoretab+diag(H)
-        update=solve(H*scale,E)
-        b[upd_set]=b[upd_set]*exp(update)
-        converged=max(converged,max(abs(E))/mm) 
+        upd_set = first[[m]][i]:last[[m]][i]
+        pi = pi_mat[upd_set,,drop=FALSE]
+        E = sufI[upd_set]-pi%*%scoretab
+        H = -pi%*%tcrossprod(diag(scoretab),pi) #(diag(scoretab)%*%t(pi)) 
+        diag(H) = pi%*%scoretab+diag(H)
+        update = solve(H*scale,E)
+        b[upd_set] = b[upd_set]*exp(update)
+        converged = max(converged,max(abs(E))/mm) 
         HRM[upd_set,upd_set]=H
       }
     }
     if (converged<1) scale=1
   }
-  
-  bRM=b
-  cRM=ic
-  
+
   ## IM
   converged=2
   scale=2
+  
+  pi_mat = ittotmat_mst(b, a, rep(ic,ncat), cfirst, clast, bmin, bmax, nMod, crouting,
+                        mnit, min_scores, max_scores)
+  
+  out$regs$ctrRM = pi_mat
+  out$bRM=drop(b)
+  out$cRM=ic
+  out$HRM = HRM
+  
   while(converged>0.001)
   {
     converged=-1
-    if (routing=="last") pi_mat = ittotmatIM_MS_last(b, ic[C], a, first, last, min_scores, max_scores) 
-    if (routing=="all")  pi_mat =  ittotmatIM_MS_all(b, ic[C], a, first, last, min_scores, max_scores) 
-    indx_set=first_last2index_MST(first,last)
-    pi_mat=pi_mat[indx_set,]
-    pi_mat[is.na(pi_mat)]=0
+    
     tel_ic=1
     for (m in 1:nMod)
     {
@@ -647,24 +414,30 @@ Estim_MST <-function(a, first, last, min_scores, max_scores, sufI, sufC, scoreta
         converged=max(converged,max(abs(E))/mm)
       }
     }
+    pi_mat = ittotmat_mst(b, a, rep(ic,ncat), cfirst, clast, bmin, bmax, nMod, crouting,
+                          mnit, min_scores, max_scores)
+    
     if (converged<1) scale=1
   }
+  out$regs$ctrIM = pi_mat
+  out$bIM = drop(b)
+  out$cIM = ic
+  out$se.c = sqrt(var.ic)
+  out$fit.stats = log(ic)/sqrt(var.ic)
   
-  return(list(routing=routing, bRM=bRM,cRM=cRM,bIM=b,cIM=ic,
-              se.c=sqrt(var.ic),HRM=HRM, 
-              fit.stats=log(ic)/sqrt(var.ic)))
+  out
 }
 
 ## Generate response NRM
 
-rNRM=function(theta, b, a, first, last)
-{
-  sampleNRM(as.double(theta),
-             as.double(b), 
-             as.integer(a), 
-             as.integer(first-1),
-             as.integer(last-1))
-}
+# rNRM=function(theta, b, a, first, last)
+# {
+#   sampleNRM(as.double(theta),
+#              as.double(b), 
+#              as.integer(a), 
+#              as.integer(first-1),
+#              as.integer(last-1))
+# }
 
 
 ################################### Abilities

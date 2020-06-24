@@ -1,17 +1,34 @@
 
 
 
-# #' @export
-# dexter::ability
+#' @aliases ability_tables
+#' @export
+dexter::ability
 
 
-# #' @export
-# dexter::ability_tables
 
 
-# #' @export
-# dexter::plausible_values
+#' @export
+dexter::plausible_values
 
+
+if.else = function(s,a,b) if(s){a}else{b}
+
+
+is_connected = function(booklet_id, first,last)
+{
+  dsg = tibble(booklet_id = rep(as.integer(booklet_id), last-first+1),
+               param = do.call(c,mapply(':',first,last,SIMPLIFY=FALSE)))
+  
+  tb = table(dsg$param, dsg$booklet_id)
+  
+  mt = crossprod(tb,tb)
+  
+  mode(mt) = 'integer'
+  
+  # DFS
+  is_connected_C(mt)
+}
 
 # mix default with user args
 merge_arglists = function(args, default = NULL, override = NULL)
@@ -28,6 +45,26 @@ merge_arglists = function(args, default = NULL, override = NULL)
 }
 
 
+
+# add named column(s) to the end of a data.frame
+add_column = function(df, ...)
+{
+  dots = list(...)
+  if(is.null(names(dots)) || any(names(dots) == ''))
+    stop('arguments must be named')
+  
+  for(nm in names(dots))
+  {
+    vec = dots[[nm]]
+    if(NROW(df)==0)
+      vec = vec[0]
+      
+    stopifnot(length(vec)==1 || NROW(df) == length(vec))
+    df[[nm]] = vec
+  }
+  
+  df
+}
 
 # given min and max values defining a number of ranges
 # returns a logical vector indicating whether each range overlaps 

@@ -4,8 +4,11 @@
 \alias{get_responses_mst}
 \title{Extract response data from a dexterMST database}
 \usage{
-get_responses_mst(db, predicate = NULL, columns = c("person_id",
-  "test_id", "booklet_id", "item_id", "item_score"))
+get_responses_mst(
+  db,
+  predicate = NULL,
+  columns = c("person_id", "test_id", "booklet_id", "item_id", "item_score")
+)
 }
 \arguments{
 \item{db}{a dexterMST project database connection}

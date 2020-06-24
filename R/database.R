@@ -84,6 +84,7 @@ sql_coldef_from_pragma = function(pr_info, tbname)
 #' 
 #' @examples
 #' \dontrun{
+#' library(dexter)
 #' dbDex = start_new_project(verbAggrRules, "verbAggression.db", 
 #'   person_properties=list(gender="unknown"))
 #' add_booklet(dbDex, verbAggrData, "agg")
@@ -114,8 +115,8 @@ import_from_dexter = function(db, dexter_db, dx_response_prefix = '' )
     new_iprop = setdiff(dbListFields(dxdb,'dxItems'), dbListFields(db,'Items'))
     
     # items and properties
-    dbGetQuery(dxdb, 'pragma table_info(dxItems);') %>%
-      filter(!.data$name %in% dbListFields(db,'Items')) %>%
+    dbGetQuery(dxdb, 'pragma table_info(dxItems);') %>%     
+      filter(!.data$name %in% dbListFields(db,'items')) %>%
       sql_coldef_from_pragma(tbname = 'Items') %>%
       lapply(dbExecute, conn = db)
   
@@ -150,14 +151,14 @@ import_from_dexter = function(db, dexter_db, dx_response_prefix = '' )
     
     mbscores = dbGetQuery(db, 'SELECT DISTINCT item_id, item_score FROM Scoring_rules;') %>%
       semi_join(dxrules, by='item_id') %>%
-      add_column(in_acetcpp = 1L)
-      
+      add_column(in_mst=1L)
+
     mismatch = dxrules %>%
       distinct(.data$item_id, .data$item_score) %>%
       semi_join(mbscores, by='item_id') %>%
       add_column(in_dexter = 1L) %>%
       full_join(mbscores, by=c('item_id','item_score')) %>%
-      filter(is.na(.data$in_acetcpp) | is.na(.data$in_dexter))
+      filter(is.na(.data$in_mst) | is.na(.data$in_dexter))
     
     if(nrow(mismatch) > 0)
     {
@@ -166,7 +167,7 @@ import_from_dexter = function(db, dexter_db, dx_response_prefix = '' )
         group_by(.data$item_id) %>%
         arrange(.data$item_score) %>%
         summarise(scores_in_dexter = paste(.data$item_score[!is.na(.data$in_dexter)], collapse=', '),
-                  scores_in_acetcpp = paste(.data$item_score[!is.na(.data$in_acetcpp)], collapse=', ')) %>%
+                  scores_in_mst = paste(.data$item_score[!is.na(.data$in_mst)], collapse=', ')) %>%
         ungroup() %>%  
         as.data.frame() %>% 
         print(row.names=FALSE)

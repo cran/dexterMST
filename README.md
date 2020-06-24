@@ -1,8 +1,14 @@
 <!-- README.md is generated from README.Rmd. Please edit that file -->
+
 DexterMST
 =========
 
-DexterMST is an R package acting as a companion to dexter and adding facilities to manage and analyze data from multistage tests (MST). It includes functions for importing and managing test data, assessing and improving the quality of data through basic test and item analysis, and fitting an IRT model, all adapted to the peculiarities of MST designs. DexterMST typically works with project database files saved on disk.
+DexterMST is an R package acting as a companion to dexter and adding
+facilities to manage and analyze data from multistage tests (MST). It
+includes functions for importing and managing test data, assessing and
+improving the quality of data through basic test and item analysis, and
+fitting an IRT model, all adapted to the peculiarities of MST designs.
+DexterMST typically works with project database files saved on disk.
 
 Installation
 ------------
@@ -11,7 +17,10 @@ Installation
 install.packages('dexterMST')
 ```
 
-If you encounter a bug, please post a minimal reproducible example on [github](https://github.com/jessekps/dexter/issues). We post news and examples on a [blog](http://dexterities.netlify.com), it's also the place for general questions.
+If you encounter a bug, please post a minimal reproducible example on
+[github](https://github.com/jessekps/dexter/issues). We post news and
+examples on a [blog](http://dexterities.netlify.com), it’s also the
+place for general questions.
 
 Example
 -------
@@ -24,28 +33,32 @@ library(dplyr)
 # start a project
 db = create_mst_project(":memory:")
 
-# define dummy item scoring rules (i.e. response==score)
-scoring_rules = data.frame(item_id = rep(sprintf("item%02.0f",1:50), each=2),
-                            response = rep(0:1,times=50),
-                            item_score = rep(0:1,times=50))
+items = data.frame(item_id=sprintf("item%02i",1:70), item_score=1, delta=sort(runif(70,-1,1)))
 
+design = data.frame(item_id=sprintf("item%02i",1:70),
+                    module_id=rep(c('M4','M2','M5','M1','M6','M3', 'M7'),each=10))
+
+routing_rules = routing_rules = mst_rules(
+ `124` = M1[0:5] --+ M2[0:10] --+ M4, 
+ `125` = M1[0:5] --+ M2[11:15] --+ M5,
+ `136` = M1[6:10] --+ M3[6:15] --+ M6,
+ `137` = M1[6:10] --+ M3[16:20] --+ M7)
+
+
+scoring_rules = data.frame(
+  item_id = rep(items$item_id,2), 
+  item_score= rep(0:1,each=nrow(items)),
+  response= rep(0:1,each=nrow(items))) # dummy respons
+  
+
+db = create_mst_project(":memory:")
 add_scoring_rules_mst(db, scoring_rules)
 
-# define routing rules
-routing_rules = mst_rules(
-  easy = Mod_1[0:5] --+ Mod_2, 
-  hard = Mod_1[6:10] --+ Mod_3)
-
-# define a module design (i.e., specifify which items belong to which modules)
-design = data.frame(module_id = rep(c('Mod_2','Mod_1','Mod_3'), times=c(20,10,20)),
-                   item_id = paste0("item",sprintf("%02.0f",1:50)),
-                   item_position = c(1:20,1:10,1:20))
-
-# create/define an mst test
 create_mst_test(db,
                 test_design = design,
                 routing_rules = routing_rules,
-                test_id = 'ZwitserMaris')
+                test_id = 'sim_test',
+                routing = "all")
 ```
 
 We can now plot the design
@@ -58,35 +71,13 @@ design_plot(db)
 We now simulate data:
 
 ``` r
-sim_RM = function(theta,delta)
-{
-  nP=length(theta)
-  dat=matrix(0,nP,length(delta))
-  for (i in 1:length(delta)) dat[,i]=1*(rlogis(nP,0,1)<=(theta-delta[i]))
-  return(dat)
-}
-a = rep(1,50)
-delta = c(runif(20,-2.3,0),runif(10,-0.6,2),runif(20,1.2,2.4)) # M2, M1, M3
-b=exp(-delta)
-c = rep(0,50)
-nP = 10000
-# simulate theta from a mixture of two normals
-grp = sample(2, nP, replace = TRUE, prob = c(.6,.4))
-theta = rnorm(nP, mean = c(0,1)[grp], sd = c(1.5,0.5)[grp])
+theta = rnorm(3000)
 
-data = data.frame(sim_RM(theta, delta))
-colnames(data) = sprintf("item%02.0f",1:50)
+dat = sim_mst(items, theta, design, routing_rules,'all')
+dat$test_id='sim_test'
+dat$response=dat$item_score
 
-# add person id to the data
-data$person_id = 1:nrow(data)
-
-# extract two booklets from the complete data, based on the sum score on the first module
-bk1 = data[rowSums(data[,21:30])<=5,] %>% select(person_id, item01:item30)
-bk2 = data[rowSums(data[,21:30])>5,] %>% select(person_id, item21:item30, item31:item50)
-
-# add response data to the project
-add_booklet_mst(db, bk1, test_id = 'ZwitserMaris', booklet_id = 'easy')
-add_booklet_mst(db, bk2, test_id = 'ZwitserMaris', booklet_id = 'hard')
+add_response_data_mst(db, dat)
 ```
 
 ``` r
@@ -98,12 +89,12 @@ head(f)
 
 | item\_id |  item\_score|        beta|   SE\_beta|
 |:---------|------------:|-----------:|----------:|
-| item01   |            1|  -0.9378481|  0.0306780|
-| item02   |            1|  -1.8104684|  0.0335670|
-| item03   |            1|  -1.4555312|  0.0320611|
-| item04   |            1|  -1.4145089|  0.0319168|
-| item05   |            1|  -2.1264352|  0.0353192|
-| item06   |            1|  -1.7498811|  0.0332764|
+| item01   |            1|  -1.0967010|  0.0629430|
+| item02   |            1|  -0.9396378|  0.0626093|
+| item03   |            1|  -0.9362441|  0.0626050|
+| item04   |            1|  -0.9226755|  0.0625888|
+| item05   |            1|  -0.7974781|  0.0625298|
+| item06   |            1|  -0.8549515|  0.0625365|
 
 ``` r
 # ability estimates per person
@@ -112,14 +103,14 @@ abl = ability(rsp_data, parms = f)
 head(abl)
 ```
 
-| booklet\_id | person\_id |  sumScore|       theta|
-|:------------|:-----------|---------:|-----------:|
-| easy        | 1          |         9|  -1.0288607|
-| easy        | 10         |        23|   1.5102358|
-| easy        | 100        |        23|   1.5102358|
-| easy        | 1000       |         7|  -1.4308794|
-| easy        | 10000      |        16|   0.1809514|
-| easy        | 1001       |        13|  -0.3232153|
+| booklet\_id | person\_id |  booklet\_score|       theta|
+|:------------|:-----------|---------------:|-----------:|
+| 136         | 1          |              14|   0.1155725|
+| 136         | 10         |              20|   0.9510407|
+| 136         | 100        |              15|   0.2505641|
+| 124         | 1000       |              11|  -1.0122974|
+| 125         | 1001       |              19|   0.3546790|
+| 124         | 1002       |              15|  -0.4465699|
 
 ``` r
 # ability estimates without item Item01
@@ -130,16 +121,17 @@ pv = plausible_values(rsp_data, parms = f, nPV = 5)
 head(pv)
 ```
 
-| booklet\_id | person\_id |  sumScore|         PV1|         PV2|         PV3|         PV4|         PV5|
-|:------------|:-----------|---------:|-----------:|-----------:|-----------:|-----------:|-----------:|
-| easy        | 1          |         9|  -0.4409709|  -0.2709257|  -0.8330791|  -1.0715047|  -0.4009712|
-| easy        | 10         |        23|   1.5483993|   1.0318135|   1.3107129|   0.4420585|   1.6680941|
-| easy        | 100        |        23|   1.7134969|   1.5736628|   1.5000658|   1.8495170|   0.3622951|
-| easy        | 1000       |         7|  -1.0344610|  -1.7829133|  -1.3854931|  -0.7899523|  -1.4050426|
-| easy        | 10000      |        16|   0.0497648|   0.1811482|  -0.1966962|   0.5819318|   0.4640787|
-| easy        | 1001       |        13|  -0.0745779|  -0.8048086|   0.2805427|   0.4067189|  -0.2027418|
+| booklet\_id | person\_id |  booklet\_score|         PV1|         PV2|         PV3|         PV4|         PV5|
+|:------------|:-----------|---------------:|-----------:|-----------:|-----------:|-----------:|-----------:|
+| 136         | 1          |              14|  -0.3310002|   0.1372317|  -0.1772800|  -0.5183684|  -0.0290442|
+| 136         | 10         |              20|   0.8863248|   0.8113941|   0.6248103|   0.8908880|   1.0080691|
+| 136         | 100        |              15|   0.8551317|   0.3975271|   0.4908577|  -0.1864416|  -0.0545868|
+| 136         | 1003       |              16|   0.6045560|   0.1657788|   0.5029436|   0.3651413|   0.5977085|
+| 136         | 1006       |              24|   1.5130258|   1.4255989|   0.7971183|   1.1151426|   1.3334579|
+| 136         | 1008       |              15|   0.1326590|  -0.2617173|   0.0628930|   0.6675144|   0.2771222|
 
 Contributing
 ------------
 
-Contributions are welcome but please check with us first about what you would like to contribute.
+Contributions are welcome but please check with us first about what you
+would like to contribute.

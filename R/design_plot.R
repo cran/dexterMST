@@ -1,12 +1,12 @@
 
 
 
-
 #' Plot the routing design of mst tests
 #' 
 #' 
 #' @param db dexterMST project database connection
 #' @param predicate logical predicate to select data (tests, booklets,responses) to include in the design plot
+#' @param by_booklet plot and color the paths in a test per booklet
 #' @param ... further arguments to \code{\link[igraph]{plot.igraph}}
 #' 
 #' @details
@@ -37,85 +37,95 @@
 #' 
 #' }
 #' 
-design_plot = function(db, predicate = NULL, ...)
+design_plot = function(db, predicate = NULL, by_booklet=FALSE,...)
 {
   user.args = list(...)
   qtpredicate = eval(substitute(quote(predicate)))
   env = caller_env() 
   
-  if(inherits(db,'mst_enorm'))
+  # to~do make work for a fit object
+  
+  # linear ignored for now
+  
+  
+  if(is.null(qtpredicate))
   {
-    # for now hidden functionality
-    if(!is.null(qtpredicate))
-      stop('predicates only with database')
-    mst_inputs = db$mst_inputs
+    routing = dbReadTable(db, 'booklet_design') %>%
+      mutate(bid = paste(dense_rank(.data$test_id), dense_rank(.data$booklet_id)))
+    
+    admin =  dbGetQuery(db, 'SELECT test_id, booklet_id, COUNT(*) AS n FROM Administrations GROUP BY test_id, booklet_id;')
+    
+    if(NROW(admin)==0)
+    {
+      n_rsp = distinct(routing, .data$bid)
+      n_rsp$n=0L
+    } else
+    {
+      n_rsp = admin %>%
+        mutate(bid = paste(dense_rank(.data$test_id), dense_rank(.data$booklet_id))) %>%
+        select(-.data$test_id,-.data$booklet_id)
+    }
+    
   } else
   {
     mst_inputs = get_mst_data(db, qtpredicate, env)
-  }
-    
-  if(length(mst_inputs$bkList) == 0)
-  {
-    #have_data = (nrow(dbGetQuery(db,'SELECT 1 FROM Responses LIMIT 1;')) > 0)
-    
-    design = dbGetQuery(db, 
-                        'SELECT * FROM booklet_design 
-                        INNER JOIN Tests USING(test_id)
-                        INNER JOIN Booklets USING(test_id, booklet_id);')
-    
-    if(!is.null(qtpredicate))
+    # to~do: niet helemaal correct - > module_id is geen identifier meer omdat voor sommige leerlingen met en somiige
+    # zonder bepaalde items kan izjn
+    #temp fix, bettr done in data selection
+    if(!'module_id' %in% names(mst_inputs$routing))
     {
-      vrs = all.vars(qtpredicate)
-      if(length(setdiff(vrs, c(dbListFields(db, 'Tests'), dbListFields(db, 'Booklets')))) > 0)
-      {
-        message('No Responses selected')
-        return()
-      }
-      design = design[eval_tidy(qtpredicate, data = design, env=env), ]
+      md = dbGetQuery(db,'select test_id,booklet_id, module_id, module_nbr from booklet_design')
+      mst_inputs$routing = inner_join(mst_inputs$routing,md,by=c('test_id','booklet_id','module_nbr'))
+      
     }
+    routing = mst_inputs$routing
     
-    am = design %>%
-      arrange(.data$test_id, .data$booklet_id, .data$module_nbr) %>%
-      group_by(.data$test_id, .data$booklet_id) %>%
-      mutate(mfrom = .data$module_id, mto = lead(.data$module_id),
-             label = paste(.data$module_exit_score_min, .data$module_exit_score_max, sep=':'), n=0L) %>%
-      slice(1:(n()-1)) %>%
+    n_rsp = mst_inputs$suf_stats$plt %>%
+      distinct(.data$bid, .data$booklet_score, .keep_all=TRUE) %>%
+      group_by(.data$bid) %>%
+      summarise(n=sum(.data$N)) %>%
       ungroup()
+  }
+  
+  
+  am = routing %>%
+    group_by(.data$test_id, .data$bid) %>%
+    arrange(.data$module_nbr) %>%
+    mutate(mfrom = .data$module_id, mto = lead(.data$module_id),
+          label = paste(.data$module_exit_score_min, .data$module_exit_score_max, sep=':')) %>%
+    slice(-n()) %>%
+    ungroup()
+  
+  
+  # to~do: can show paths not taken, should show desiogn if no data yet
+  if(by_booklet)
+  {
+    am_summed = am %>%
+      inner_join(n_rsp,by='bid') %>%
+      mutate(width = .data$n/max(.data$n,1) * 10) %>%
+      mutate(width = pmax(1L,.data$width))
   } else
   {
-    am = lapply(mst_inputs$bkList, 
-                function(b)
-                {
-                  if(length(b$modules) == 1)
-                  {
-                    tibble(mfrom=b$modules[1],mto=b$modules[1],label='',n=1)
-                  } else
-                  {
-                    tibble(mfrom = b$modules[1:length(b$modules)-1], 
-                           mto = b$modules[2:length(b$modules)],
-                           label = paste(b$min_scores, b$max_scores, sep=':')[1:length(b$modules)-1],
-                           n = sum(b$scoretab))
-                  }
-                }) %>%
-      bind_rows(.id = 'booklet') %>%
-      separate(.data$booklet, into = c('test_id','booklet_id'), sep = '\\.')
+    am_summed = am %>%
+      inner_join(n_rsp,by='bid') %>%
+      group_by(.data$test_id, .data$mfrom, .data$mto, .data$label) %>%
+      summarise(width = sum(.data$n)) %>%
+      ungroup() %>%
+      mutate(width = .data$width/max(.data$width,1) * 10) %>%
+      mutate(width = pmax(1L,.data$width))
   }
+
+
   
-  
-  op = par(mar=c(0,0,0,0))
+  op = par(mar=c(0.1,0.1,0.1,0.1))
   on.exit({par(op)}, add=TRUE)
   
   
-  am_summed = am %>%
-    group_by(.data$test_id, .data$mfrom, .data$mto, .data$label) %>%
-    summarise(width = sum(.data$n)) %>%
-    ungroup() %>%
-    mutate(width = .data$width/max(.data$width,1) * 10) %>%
-    mutate(width = pmax(1L,.data$width))
-  
+
   lapply(split(am_summed, am_summed$test_id), function(amsb)
   {
-    g = graph.data.frame(select(amsb,2:5)) %>% simplify(remove.multiple=FALSE, remove.loops=TRUE)
+    g = graph.data.frame(amsb[,c('mfrom','mto','label','width')]) %>% 
+      simplify(remove.multiple=FALSE, remove.loops=TRUE)
     
     ## Decompose the graph, individual layouts
     comp = decompose.graph(g)
@@ -142,7 +152,8 @@ design_plot = function(db, predicate = NULL, ...)
     
     ## Plot everything
     
-    if(!is.null(mst_inputs$module_design_history))
+    #if(!is.null(mst_inputs$module_design_history))
+    if(FALSE)#to~do: design history not yet implemented in new one, for v 1.0
     {
       mdl = mst_inputs$module_design_history %>%
         group_by(.data$miid, .data$module_id) %>%
@@ -161,8 +172,28 @@ design_plot = function(db, predicate = NULL, ...)
                                user.args))
     } else
     {
+      #decide curves
+      curves = as.data.frame(igraph::as_edgelist(g), stringsAsFactors=FALSE) %>% 
+        mutate(rn=row_number()) %>%
+        mutate(direction=if_else(.data$V1>.data$V2,1,-1), m1=pmin(.data$V1,.data$V2), m2=pmax(.data$V1,.data$V2)) %>% 
+        group_by(.data$m1,.data$m2) %>% 
+        mutate(curvature = .data$direction * if.else(n()==1,0,seq(-.5,.5,length.out=n()))) %>%
+        arrange(.data$rn) %>%
+        pull(.data$curvature)
+
+      clr = NULL
+      if(by_booklet)
+      {
+        clr = c("#FB8072", "#80B1D3", "#FDB462", "#8DD3C7", "#BEBADA", "#B3DE69", 
+                "#E41A1C", "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00", "#A65628", 
+                "#F781BF", "#999999", "#BC80BD", "#CCEBC5", "#A50F15", "#08306B", 
+                "#00441B", "#54278F", "#fc4E2A", "#525252", "#66C2A4")
+        clr = rep_len(clr,n_distinct(amsb$bid))[dense_rank(amsb$bid)]
+      }
+      
+
       do.call(plot, modifyList(list(x=g, layout=lay, vertex.shape='rectangle',
-                                    vertex.size=45,vertex.size2=20),
+                                    vertex.size=45,vertex.size2=20, edge.curved=curves, edge.color=clr),
                                user.args))
     }
   })

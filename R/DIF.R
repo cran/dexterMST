@@ -41,9 +41,7 @@ DIF_mst = function(db, person_property, predicate=NULL)
     distinct(.data$item_id) %>% 
     anti_join(tibble(item_id = common_items), by = 'item_id')
   
-  qperson_property = sym(person_property)
-  
-  # to do: common item scores
+  # to~do: common item scores
   if(nrow(removed_items) > 0)
   {
     if(length(common_items) == 0)
@@ -51,19 +49,22 @@ DIF_mst = function(db, person_property, predicate=NULL)
     message(paste(nrow(removed_items), 
                   'items have been removed from the analysis because they do not occur in both groups'))
 
-  } 
+  }
+  
   if(is.null(qtpredicate))
   {
-    models = lapply(pp_vals, function(pp) fit_enorm_mst(db, qperson_property == pp))
+    models = lapply(pp_vals, function(pp)
+      {
+        qtp = as.call(list(as.name('=='), as.name(person_property),pp))
+        fit_enorm_mst_(db, qtpredicate=qtp,env=env)
+      })
   } else
   {
     models = lapply(pp_vals, function(pp)
     {
-      ev = as.environment(as.list(env, all.names=TRUE))
-      ev$.__pp = pp
-      ev$.__qperson_property = qperson_property
-      qtp = list(qtpredicate, eval(substitute(quote(.__qperson_property == .__pp))))
-      fit_enorm_mst_(db, qtpredicate = qtp, env = ev)
+      qtp = as.call(list(as.name('=='), as.name(person_property),pp))
+      qtp = as.call(list(as.name('&'), qtp, qtpredicate))
+      fit_enorm_mst_(db, qtpredicate = qtp, env = env)
     })
   }
   
