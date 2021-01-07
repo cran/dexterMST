@@ -316,6 +316,7 @@ Estim_MST <-function(a, first, last, min_scores, max_scores, sufI, sufC, scoreta
   
   ## Implicit Equations
   converged=2
+  iter=1
   while (converged>0.001)
   {
     pi_mat = ittotmat_mst(b, a, rep(ic,ncat), cfirst, clast, bmin, bmax, nMod, crouting,
@@ -323,6 +324,9 @@ Estim_MST <-function(a, first, last, min_scores, max_scores, sufI, sufC, scoreta
     EsufI=pi_mat%*%scoretab 
     b=b*sufI/EsufI
     converged=(max(abs(sufI-EsufI))/mm)
+    # to do: this is temporary debugging
+    if(any(pi_mat>1+1e-15)) browser()
+    iter = iter + 1
   }
   
   ## NR per item

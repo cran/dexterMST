@@ -45,6 +45,9 @@ E_profile_MS_enorm = function(b, a, first,last, mod_min, mod_max, mnit, AB,routi
 #' @param item_property the name of the item property used to define the domains.
 #' @param domains data.frame with column item_id and a column whose name matches `item_property` 
 #' 
+#' @return a data.frame with expected score per domain, booklet and booklet_score
+#' 
+#' 
 profile_tables_mst = function(parms, domains, item_property)
 {
   if(!item_property %in% colnames(domains))
@@ -77,11 +80,15 @@ profile_tables_mst = function(parms, domains, item_property)
                mod$routing[1])
         
       if(mod$routing[1]=='all')
-        mod = mod[nrow(mod),]
-      
-      mn =  sum(mod$module_exit_score_min)
-      mx = sum(mod$module_exit_score_max)
-      
+      {
+        mn =  last(mod$module_exit_score_min)
+        mx = last(mod$module_exit_score_max)
+      } else
+      {
+        mn =  sum(mod$module_exit_score_min)
+        mx = sum(mod$module_exit_score_max)
+      }
+
       tibble(booklet_score=rep(mn:mx, n_distinct(.[[item_property]])),
              item_domain = rep(sort(unique(.[[item_property]])),each=mx-mn+1),
              expected_domain_score=as.vector(p[1+(mn:mx),])) %>%

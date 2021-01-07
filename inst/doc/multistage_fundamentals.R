@@ -1,7 +1,11 @@
 ## ----setup, include=FALSE-----------------------------------------------------
 library(knitr)
-opts_chunk$set(fig.align='center',fig.width=5,fig.height=5, dev='CairoPNG') 
+opts_chunk$set(fig.align='center',fig.width=5,fig.height=5) 
 
+if (requireNamespace("Cairo", quietly = TRUE))
+{
+   opts_chunk$set(dev='CairoPNG')
+}
 par_hook = function(before, options, envir)
 {
   if(before)

@@ -4,6 +4,29 @@ globalVariables(c("."))
 #to~do: is het mogelijk dat check op onmogelijke toetspaden een warning wordt?
 
 
+
+#' DexterMST: CML calibration and data management for multi stage tests
+#' 
+#' DexterMST is a generalization of the most important functionality in dexter to multi stage tests.
+#' Function names are typically the same as in dexter with '_mst' added. CML calibration of real life
+#' mst tests is tricky, especially if one considers the need to condition on the design in combination with
+#' data selections and corrections of key errors. DexterMST aims to handle these things automatically
+#' and protect the user from making mistakes by working from a local database which enforces some restrictions.
+#' 
+#' 
+#' The main features are:
+#' 
+#' \itemize{
+#' \item project databases providing a structure for storing data about persons, items, responses and booklets.
+#' \item CML calibration of the extended nominal response model and interaction model.
+#' }
+#' 
+#' To learn more about dexterMST, start with the vignette: `vignette('dexterMST',package='dexterMST')`  
+#' 
+"_PACKAGE"
+
+
+
 #' Define routing rules
 #'
 #' Define routing rules for use in \code{\link{create_mst_test}}

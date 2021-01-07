@@ -3,6 +3,7 @@ context('test polytomous')
 library(dplyr)
 library(dexter)
 library(tidyr)
+library(RSQLite)
 
 
 test_that('discriminations', {
@@ -54,7 +55,7 @@ test_that('discriminations', {
   f=fit_enorm_mst(db)
   
   expect_gt(cor(items$beta,coef(f)$beta), 0.98)
-  
+  dbDisconnect(db)
 
 })
 
@@ -106,7 +107,7 @@ test_that('poly NR problem', {
   
   #plot(tst$beta.x,tst$beta.y,col=tst$col)
   #abline(0,1)
-  
+  dbDisconnect(db)
   
   
 })
@@ -175,7 +176,7 @@ test_that('poly normal2', {
   #plot(tst$beta,tst$mean_beta,col=tst$col)
   #abline(0,1)
   
-  
+  dbDisconnect(db)
   
 })
 

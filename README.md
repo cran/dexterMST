@@ -19,7 +19,7 @@ install.packages('dexterMST')
 
 If you encounter a bug, please post a minimal reproducible example on
 [github](https://github.com/jessekps/dexter/issues). We post news and
-examples on a [blog](http://dexterities.netlify.com), it’s also the
+examples on a [blog](https://dexterities.netlify.app/), it’s also the
 place for general questions.
 
 Example

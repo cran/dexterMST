@@ -42,8 +42,12 @@ border:none;
 
 ```{r setup, include=FALSE}
 library(knitr)
-opts_chunk$set(fig.align='center',fig.width=5,fig.height=5, dev='CairoPNG') 
+opts_chunk$set(fig.align='center',fig.width=5,fig.height=5) 
 
+if (requireNamespace("Cairo", quietly = TRUE))
+{
+   opts_chunk$set(dev='CairoPNG')
+}
 par_hook = function(before, options, envir)
 {
   if(before)
@@ -245,7 +249,7 @@ plot(fi, item_id='item21')
 plot(fi, item_id='item45')
 ```
 
-The plots are similar to those in __dexter__ except that some scores are ruled out due to the design of the test. The interaction model can only be fitted on one booklet at a time, but this includes the rather complicated MST booklets. A more detailed discussion of the item-total regressions may be found in __dexter__'s vignettes or on [our blog](http://dexterities.netlify.com/2018/02/25/item-total-regressions-in-dexter/).
+The plots are similar to those in __dexter__ except that some scores are ruled out due to the design of the test. The interaction model can only be fitted on one booklet at a time, but this includes the rather complicated MST booklets. A more detailed discussion of the item-total regressions may be found in __dexter__'s vignettes or on [our blog](https://dexterities.netlify.app/2018/02/25/item-total-regressions-in-dexter/).
 
 ### Estimate the IRT model
 

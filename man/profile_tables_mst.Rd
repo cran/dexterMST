@@ -13,6 +13,9 @@ profile_tables_mst(parms, domains, item_property)
 
 \item{item_property}{the name of the item property used to define the domains.}
 }
+\value{
+a data.frame with expected score per domain, booklet and booklet_score
+}
 \description{
 Expected and observed domain scores per booklet and test score
 }

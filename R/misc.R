@@ -95,8 +95,8 @@ range_overlap = function(mn, mx)
 check_rule = function(rule)
 {
   
-  if(names(rule)[length(rule)] != 'sym')
-    stop(paste('error in rule:\n',paste(rule, collapse=''),'rule should end with a module name'))
+  #if(names(rule)[length(rule)] != 'sym')
+  #  stop(paste('error in rule:\n',paste(rule, collapse=''),'rule should end with a module name'))
   
   mod_name = function(ch) if(names(ch) != 'sym') 'unexpected operator'
   lbracket = function(ch) if(names(ch) != 'op' || ch != '[') paste('expected `[`, found:', ch)

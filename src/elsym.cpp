@@ -103,9 +103,14 @@ int elsym(const int routing, const vec& b, const ivec& a,
 			else
 			{
 				for(int s1 = cummax; s1>=cummin; s1--)
+				{
 					for(int s2 = mod_min[m]; s2<=mod_max[m]; s2++)
 						if(s2>0)
 							g_out[s1+s2] += g_out[s1] * g[s2];			
+					
+					if(mod_min[m]>0)
+						g_out[s1] = 0;
+				}
 			}		
 			cummin += mod_min[m];
 			cummax += mod_max[m];
@@ -535,11 +540,12 @@ arma::mat  ittotmat_mst( const arma::vec& b, const arma::ivec& a, const arma::ve
 				{
 					for (int j = first[it]; j <= last[it]; j++) 
 					{
-					  elsym(brouting, eta, a,  first.memptr(), last.memptr(), nI, 
-             mod_min.memptr(), mod_max.memptr(), nmod,mnit.memptr(), gi, first[it],a[j]);
+						elsym(brouting, eta, a,  first.memptr(), last.memptr(), nI, 
+								mod_min.memptr(), mod_max.memptr(), nmod,mnit.memptr(), gi, first[it],a[j]);
 						indx = s-a[j];
 						if ( indx >= 0 && indx < (nscores - a[last[it]])) 
-							pi.at(k,s) = exp(log(eta[j]) + log(gi[indx]) - log(g[s]));
+							//pi.at(k,s) = exp(log(eta[j]) + log(gi[indx]) - log(g[s]));
+							pi.at(k,s) = eta[j] * gi[indx]/g[s];
 						k++;
 					}
 				}
@@ -630,8 +636,8 @@ arma::vec prof_enorm(const arma::vec& b, const arma::ivec& a, arma::ivec& first,
 		}
 		else
 		{
-			MscA = std::min(MscA, mod_max[m] - mod_max[m-1]);
-			MscB = std::min(MscB, mod_max[m] - mod_max[m-1]);		
+			MscA = std::min(MscA, mod_max[m] - mod_min[m-1]);
+			MscB = std::min(MscB, mod_max[m] - mod_min[m-1]);		
 		}
 		
 		if(routing == LAST)
@@ -643,7 +649,6 @@ arma::vec prof_enorm(const arma::vec& b, const arma::ivec& a, arma::ivec& first,
 							for(int sBp=mB;sBp>=0; sBp--)
 								if(	ps(sAp, sBp,1-idx) > 0)
 									ps(sAp+sA,sBp+sB,idx) += ps(sAp, sBp,1-idx) * gA[sA] * gB[sB];
-									
 		}
 		else
 		{
@@ -653,11 +658,15 @@ arma::vec prof_enorm(const arma::vec& b, const arma::ivec& a, arma::ivec& first,
 						for(int sBp=mB;sBp>=0; sBp--)		
 							if( ps(sAp, sBp,1-idx) > 0 && sAp + sA + sBp + sB >= mod_min[m] && sAp + sA + sBp + sB <= mod_max[m])
 								ps(sAp+sA,sBp+sB,idx) += ps(sAp, sBp,1-idx) * gA[sA] * gB[sB];
-				
 		}
-
+		
 		mA += MscA;
 		mB += MscB;
+		if(routing == ALL)
+		{
+			mA = std::min(mA, mod_max[m]);
+			mB = std::min(mB, mod_max[m]);
+		}
 		idx = 1-idx;
 	}	
 
