@@ -235,12 +235,12 @@ plot(delta, delta.mml+mean(delta) - mean(delta.mml),
 abline(0,1,lty=3)
 
 ## ---- eval=FALSE--------------------------------------------------------------
-#  tia_tables(get_responses_mst(db))$testStats %>%
-#    select(booklet_id, meanP)
+#  tia_tables(get_responses_mst(db))$booklets %>%
+#    select(booklet_id, mean_pvalue)
 
 ## ---- echo=TRUE---------------------------------------------------------------
-tia_tables(get_responses_mst(db))$testStats %>%
-  select(booklet_id, meanP) %>%
+tia_tables(get_responses_mst(db))$booklets %>%
+  select(booklet_id, mean_pvalue) %>%
   kable(caption='mean item correct')
 
 
