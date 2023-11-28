@@ -1,8 +1,8 @@
 Package: dexterMST
 Type: Package
 Title: CML and Bayesian Calibration of Multistage Tests
-Version: 0.9.3
-Date: 2022-02-14
+Version: 0.9.5
+Date: 2023-11-21
 Authors@R: c(person("Timo", "Bechger", role = c("aut", "cre"),
                      email = "tmbechger@gmail.com"),
               person("Jesse","Koops", role = "aut"),
@@ -14,23 +14,24 @@ Description: Conditional Maximum Likelihood Calibration and data management of m
   Supports polytomous items and incomplete designs with linear as well as multistage tests.
   Extended Nominal Response and Interaction models, DIF and profile analysis.
   See Robert J. Zwitser and Gunter Maris (2015)<doi:10.1007/s11336-013-9369-6>.
-License: GPL (>= 2)
+License: LGPL-3
 URL: https://dexter-psychometrics.github.io/dexter/
 BugReports: https://github.com/dexter-psychometrics/dexter/issues
 Encoding: UTF-8
 Depends: R (>= 3.4)
-Imports: Rcpp, dexter (>= 1.1.4), dplyr, RSQLite, rlang, igraph (>=
-        1.2.1), tidyr, DBI, crayon, graphics, methods, stats, utils
-LinkingTo: Rcpp, RcppArmadillo
-RoxygenNote: 7.1.2
+Imports: Rcpp, RcppArmadillo, dexter (>= 1.2.2), dplyr, RSQLite, rlang,
+        igraph (>= 1.2.1), tidyr, DBI, crayon, graphics, methods,
+        stats, utils
+LinkingTo: Rcpp, RcppArmadillo (>= 0.12.6.6.0)
+RoxygenNote: 7.2.3
 Suggests: knitr, rmarkdown, testthat, mirt, ggplot2, Cairo
 VignetteBuilder: knitr
 NeedsCompilation: yes
-Packaged: 2022-02-14 19:22:02 UTC; timo
+Packaged: 2023-11-28 09:53:09 UTC; jessek
 Author: Timo Bechger [aut, cre],
   Jesse Koops [aut],
   Ivailo Partchev [aut],
   Gunter Maris [aut],
   Robert Zwitser [ctb]
 Repository: CRAN
-Date/Publication: 2022-02-14 19:40:13 UTC
+Date/Publication: 2023-11-28 12:30:03 UTC

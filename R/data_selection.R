@@ -207,6 +207,7 @@ safe_mst_data = function(db, qtpredicate, env)
   # avoids all time consuming computations for mutilating routing rules, etc.
   
   columns = c('person_id', 'test_id', 'booklet_id', 'item_id', 'item_score')
+  ncores = get_cores()
   
   respData = get_rsp_data(db, qtpredicate=qtpredicate, env=env,
                           columns=columns,
@@ -223,7 +224,7 @@ safe_mst_data = function(db, qtpredicate, env)
   respData$test_id = NULL
   respData$booklet_id = NULL
   
-  if(!is_person_booklet_sorted(respData$bid, respData$person_id))
+  if(!is_person_booklet_sorted(respData$bid, respData$person_id, ncores))
     respData = arrange(respData, .data$person_id, .data$bid)
   
   respData$booklet_score = mutate_booklet_score(respData$person_id, respData$bid, respData$item_score)
@@ -259,6 +260,7 @@ unsafe_mst_data = function(db, qtpredicate,  env)
 {
  
   columns=c('person_id', 'test_id', 'booklet_id', 'module_nbr','item_id', 'item_score')
+  ncores = get_cores()
   
   respData = get_rsp_data(db, qtpredicate=qtpredicate, env=env,
                           columns=columns,
@@ -276,7 +278,7 @@ unsafe_mst_data = function(db, qtpredicate,  env)
   respData$test_id = NULL
   respData$booklet_id = NULL
   
-  if(!is_person_booklet_sorted(respData$bid, respData$person_id))
+  if(!is_person_booklet_sorted(respData$bid, respData$person_id, ncores))
     respData = arrange(respData, .data$person_id, .data$bid)
   
   respData$booklet_score = 0L
@@ -319,7 +321,7 @@ unsafe_mst_data = function(db, qtpredicate,  env)
   bdes = bdes  %>% 
     inner_join(item_ms, by='item_id') %>%
     inner_join(bid_info$bid_tb, by=c('test_id','booklet_id')) %>%
-    select(old_bid='bid', .data$module_nbr, .data$item_id, .data$item_maxscore) %>%
+    select(old_bid='bid', 'module_nbr', 'item_id', 'item_maxscore') %>%
     mutate(old_bid=as.integer(.data$old_bid)) %>%
     inner_join(dsg$booklets_items, by=c('old_bid','item_id'))
   
@@ -375,7 +377,7 @@ unsafe_mst_data = function(db, qtpredicate,  env)
       }
     }) %>%
     ungroup() %>%
-    select(-.data$old_bid,-.data$mod_maxscore)
+    select(-'old_bid',-'mod_maxscore')
 
   bid_lev = routing %>%
     group_by(.data$bid, .data$test_id, .data$booklet_id) %>%
