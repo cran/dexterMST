@@ -10,6 +10,10 @@ ffactor = function (x, levels=NULL, as_int=FALSE)
   }
 }
 
+
+# to do: a function mst_data that takes design, routing_rules and data
+# saves the relevant (scored) tables in memory so that predicates can still be applied relatively easily
+
 # can/likely to return unused levels
 bid = function(respData, db)
 {

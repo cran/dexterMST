@@ -1,10 +1,10 @@
-e50baeaf8f7dc5411f53cb4705c8c2ef *DESCRIPTION
+3a78eee273bef0e12fee63bd6e99cddd *DESCRIPTION
 d8a2eb908a46992e5a4b2235b15b06c1 *NAMESPACE
-4a3e1e7415478f01873a50048479689d *NEWS
+e8316cbf687677cfa1cde3496ac0cf33 *NEWS
 960e050aaed25fb250bc7436c057bb5a *R/DIF.R
 7134cc4509bac2c8545dfb3b90dd26e4 *R/RcppExports.R
 9bdd2c3f4b585a38d402cd60186aa9ca *R/anon.R
-21967d18430f18bcaff9d3c0094024fa *R/data_selection.R
+123afacde916f21518b4f2d071100785 *R/data_selection.R
 616c001c512e4bbb706f7c041bfc49ab *R/database.R
 5fd3f9ab51a2344f53c1cf638dca60ed *R/design_plot.R
 b0b3e9ea36d1f951d894b75bd047556d *R/dexter.R
@@ -20,7 +20,7 @@ cf1d0ffb8793600523cb9a28baeb2ac8 *README.md
 7a24063cbd19048b1b9de957b19a65f2 *build/vignette.rds
 5c5e683923adcba55afe1cdf9b7b7798 *inst/doc/multistage_fundamentals.R
 75ad0bf66ce4f7077c9e309af027b826 *inst/doc/multistage_fundamentals.Rmd
-7ae585293d5922e3b7bd45be5a7aedee *inst/doc/multistage_fundamentals.html
+8254e04edb402f09901d2bfc44cfbf61 *inst/doc/multistage_fundamentals.html
 2c9f3258595fd6310962c789d194ff06 *inst/extdata/mst_sqlite.sql
 212d59d51813789161c8e180bf5bc529 *man/DIF_mst.Rd
 68b1fa0e891425a32d86b40b80162e9f *man/add_item_properties_mst.Rd
@@ -48,8 +48,9 @@ a4480e036b8cc5c954e21764b9c6ac0f *man/sim_mst.Rd
 5d071be4e6977c1f9babf740cabe5e5f *src/Makevars
 5d071be4e6977c1f9babf740cabe5e5f *src/Makevars.win
 c95ff7c614f41ccb81552828131572c5 *src/RcppExports.cpp
-3d363edf6f281cccd851833f7426f687 *src/data.cpp
-9e6b737105273b79242fb61b9f192ced *src/elsym.cpp
+69582d715c6eb005e19cce863efa5264 *src/data.cpp
+121052ccde446e3c67ec557338804187 *src/elsym.cpp
+b6766a0fc2a11b01816e089750ad5ebc *src/myomp.h
 ba4e075df3f958d810d5c7aebcd883a1 *tests/testthat.R
 ad64c567613047f8968878f877a15c91 *tests/testthat/test_calibration.R
 9b35d622229aa2a696946ea2cd199202 *tests/testthat/test_inputs.R
